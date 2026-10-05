@@ -29,12 +29,15 @@
       maxResolution: 2,    // caps pixel density so 4K/retina screens stay fast
     };
 
-    // Each image is a single horizontal strip of equally sized frames.
+    // Folder holding the sprite sheets, relative to index.html.
+    const SPRITE_DIR = 'sprite/Cat 1/';
+
+    // Each image is a single horizontal strip of equally sized 64x64 frames.
     // animationSpeed is "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps).
     const ANIMATIONS = {
-      idle:  { file: 'idle.png',  frames: 6, speed: 0.10 },
-      run:   { file: 'run.png',   frames: 6, speed: 0.22 },
-      sleep: { file: 'sleep.png', frames: 4, speed: 0.04 },
+      idle:  { file: 'Idle.png',     frames: 6, speed: 0.10 },
+      run:   { file: 'Running.png',  frames: 6, speed: 0.22 },
+      sleep: { file: 'Sleeping.png', frames: 4, speed: 0.04 },
     };
 
     // ------------------------------------------------------------------
@@ -58,15 +61,48 @@
       return frames;
     }
 
+    // The cat isn't drawn in the same spot in every sheet (e.g. the running
+    // frames float a few pixels above the bottom edge). Scan the opaque pixels
+    // of all frames once and return an anchor at the cat's feet: horizontally
+    // centred on the body, vertically on the lowest pixel. This keeps the cat
+    // standing on the floor and stops it jumping sideways when it switches
+    // animation or flips direction.
+    function feetAnchor(texture, count) {
+      const w = Math.floor(texture.width / count);
+      const h = texture.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w * count;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(texture.source.resource, 0, 0);
+      const { data } = ctx.getImageData(0, 0, canvas.width, h);
+
+      let left = w, right = -1, bottom = -1;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          if (data[(y * canvas.width + x) * 4 + 3] === 0) continue;
+          const fx = x % w;                                // x within its frame
+          if (fx < left) left = fx;
+          if (fx > right) right = fx;
+          bottom = y;
+        }
+      }
+      if (bottom < 0) return { x: 0.5, y: 1 };             // fully transparent sheet
+      return { x: (left + right + 1) / 2 / w, y: (bottom + 1) / h };
+    }
+
     async function loadFrames() {
       const entries = Object.entries(ANIMATIONS);
       const textures = await Promise.all(
-        entries.map(([, a]) => PIXI.Assets.load(a.file))
+        entries.map(([, a]) => PIXI.Assets.load(SPRITE_DIR + a.file))
       );
       const out = {};
       entries.forEach(([name, a], i) => {
-        if (!textures[i]) throw new Error(`Could not load ${a.file}`);
-        out[name] = sliceFrames(textures[i], a.frames);
+        if (!textures[i]) throw new Error(`Could not load ${SPRITE_DIR + a.file}`);
+        out[name] = {
+          textures: sliceFrames(textures[i], a.frames),
+          anchor: feetAnchor(textures[i], a.frames),
+        };
       });
       return out;
     }
@@ -80,7 +116,7 @@
         'font:16px/1.5 system-ui,sans-serif;';
       el.textContent = location.protocol === 'file:'
         ? 'Images can\'t load when this page is opened straight from disk. Serve the folder with a local server (e.g. VS Code Live Server, "npx serve", or "python -m http.server") and open it via http://localhost.'
-        : `${err.message}. Check that the image files sit next to index.html and match the names in ANIMATIONS.`;
+        : `${err.message}. Check that the image files are in "${SPRITE_DIR}" and match the names in ANIMATIONS.`;
       document.body.appendChild(el);
     }
 
@@ -113,8 +149,7 @@
       floor.eventMode = 'none';
       app.stage.addChild(floor);
 
-      const cat = new PIXI.AnimatedSprite(frames.idle);
-      cat.anchor.set(0.5, 1);                               // pivot at bottom-centre (feet)
+      const cat = new PIXI.AnimatedSprite(frames.idle.textures);
       cat.scale.set(CONFIG.scale);
       cat.eventMode = 'none';                               // skip hit-testing, we don't need clicks
       app.stage.addChild(cat);
@@ -128,7 +163,8 @@
 
       function enter(next) {
         state = next;
-        cat.textures = frames[next];
+        cat.textures = frames[next].textures;
+        cat.anchor.copyFrom(frames[next].anchor);           // pivot at the cat's feet
         cat.animationSpeed = ANIMATIONS[next].speed;
         cat.gotoAndPlay(0);
 
