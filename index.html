@@ -3,228 +3,933 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Cat Window Project</title>
+  <title>Cat Playground</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐱</text></svg>">
   <style>
-    html, body {
-      margin: 0;
-      height: 100%;
-      overflow: hidden;
-      background: #1b1b24;
+    :root {
+      color-scheme: dark;
+      --bg: #1b1b24;
+      --bar: #23232f;
+      --edge: #363649;
+      --slot: #2d2d3d;
+      --slot-hover: #3b3b52;
+      --text: #f2f2f7;
+      --muted: #9a9ab0;
+      --focus: #8ab4ff;
+      --danger: #e5484d;
     }
-    canvas { display: block; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.4 system-ui, sans-serif;
+    }
+
+    /* ---- Control bar: everything you can add, plus the trash ---- */
+    .bar {
+      display: flex;
+      gap: 12px;
+      padding: 8px 12px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--edge);
+    }
+    .palette {
+      flex: 1;
+      min-width: 0;                   /* let it scroll instead of widening the page */
+      display: flex;
+      gap: 20px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      padding-bottom: 2px;
+    }
+    .group { display: flex; flex-direction: column; gap: 4px; }
+    .group h2 {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .group > div { display: flex; gap: 6px; }
+    .item {
+      flex: none;
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      background: var(--slot);
+      border: 0;
+      border-radius: 10px;
+      cursor: grab;
+      touch-action: pan-x;            /* swipe sideways scrolls the bar, drag down places the item */
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .item:hover { background: var(--slot-hover); }
+    .item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .item canvas, .ghost, .pic canvas { image-rendering: pixelated; pointer-events: none; }
+
+    .trash {
+      flex: none;
+      width: 72px;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      gap: 2px;
+      border: 2px dashed var(--edge);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      transition: background-color .15s, border-color .15s, color .15s, transform .15s;
+    }
+    .dragging .trash { border-color: var(--muted); }
+    .trash.armed {
+      background: color-mix(in srgb, var(--danger) 18%, transparent);
+      border-color: var(--danger);
+      color: var(--danger);
+      transform: scale(1.06);
+    }
+
+    /* ---- Scene: the whole area below the bar is floor ---- */
+    #scene {
+      position: relative;
+      min-height: 0;
+      background:
+        linear-gradient(to bottom, rgb(0 0 0 / .25), transparent 35%),
+        repeating-linear-gradient(to bottom, transparent 0 47px, rgb(0 0 0 / .14) 47px 48px),
+        #37313f;
+    }
+    #scene canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+
+    .ghost { position: fixed; left: 0; top: 0; z-index: 10; opacity: .85; }
+    .dragging, .dragging * { cursor: grabbing !important; user-select: none; }
+
+    /* ---- Delete confirmation ---- */
+    dialog {
+      width: min(320px, calc(100vw - 32px));
+      padding: 20px;
+      border: 1px solid var(--edge);
+      border-radius: 14px;
+      background: var(--bar);
+      color: var(--text);
+      text-align: center;
+    }
+    dialog::backdrop { background: rgb(0 0 0 / .55); }
+    dialog p { margin: 8px 0 18px; font-size: 16px; }
+    .pic { display: grid; place-items: center; min-height: 64px; }
+    .actions { display: flex; justify-content: center; gap: 8px; }
+    .actions button {
+      font: inherit;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--edge);
+      background: var(--slot);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .actions button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+    @media (max-width: 600px) {
+      .bar { gap: 8px; padding: 6px 8px; }
+      .group h2 { display: none; }
+      .item { width: 44px; height: 44px; }
+      .trash { width: 56px; }
+    }
   </style>
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
-  <script>
-    // ------------------------------------------------------------------
-    // Config – edit file names / frame counts here if yours differ
-    // ------------------------------------------------------------------
-    const CONFIG = {
-      background: '#1b1b24',
-      floorColor: 0x262633,
-      floorRatio: 0.8,     // floor sits at 80% of the screen height
-      scale: 4,            // keep this an integer for crisp pixel art
-      runSpeed: 320,       // pixels per second
-      maxResolution: 2,    // caps pixel density so 4K/retina screens stay fast
-    };
+  <header class="bar" aria-label="Add cats and objects: drag one into the scene, or click it">
+    <div class="palette" id="palette"></div>
+    <div class="trash" id="trash" title="Drag something here to delete it">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
+      </svg>
+      Trash
+    </div>
+  </header>
+  <main id="scene"></main>
 
-    // Folder holding the sprite sheets, relative to index.html.
-    const SPRITE_DIR = 'sprite/Cat 1/';
+  <dialog id="confirm" aria-labelledby="confirm-text">
+    <form method="dialog">
+      <div class="pic" id="confirm-pic"></div>
+      <p id="confirm-text">Delete <strong id="confirm-name"></strong> from the scene?</p>
+      <div class="actions">
+        <button value="cancel" autofocus>Keep it</button>
+        <button value="delete" class="danger">Delete</button>
+      </div>
+    </form>
+  </dialog>
 
-    // Each image is a single horizontal strip of equally sized 64x64 frames.
-    // animationSpeed is "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps).
-    const ANIMATIONS = {
-      idle:  { file: 'Idle.png',     frames: 6, speed: 0.10 },
-      run:   { file: 'Running.png',  frames: 6, speed: 0.22 },
-      sleep: { file: 'Sleeping.png', frames: 4, speed: 0.04 },
-    };
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.22.0/dist/pixi.min.js"></script>
+  <script type="module">
+    // ------------------------------------------------------------------
+    // Catalogue – every cat and object in the control bar
+    // ------------------------------------------------------------------
+    // `scale` is the on-screen pixel size on a desktop-width screen (halved on
+    // phones). Cat 1 is drawn at twice the detail of the others, hence 2 vs 4.
+    // Cat sheets are strips of square frames; the frame count comes from the
+    // image size, so only the file names are listed here.
+    const CATS = [
+      { name: 'Cream cat', dir: 'Cat 1/', scale: 2,
+        files: { idle: 'Idle', run: 'Running', sit: 'Chilling', sleep: 'Sleeping', jump: 'Jump', attack: 'Attack', happy: 'Happy' } },
+      { name: 'Tiger cat', dir: 'TigerCat/', scale: 4,
+        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
+      { name: 'Batman cat', dir: 'BatmanCat/', scale: 4,
+        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
+      { name: 'Egyptian cat', dir: 'EgyptCat/', scale: 4,
+        files: { idle: 'IdleCatb', run: 'RunCatb', sit: 'Sittingb', sleep: 'SleepCatb', jump: 'JumpCabt', attack: 'AttackCatb' } },
+      { name: 'Siamese cat', dir: 'Siamese/', scale: 4,
+        files: { idle: 'IdleCattt', run: 'RunCattt', sit: 'Sittinggg', sleep: 'SleepCattt', jump: 'JumpCatttt', attack: 'AttackCattt' } },
+      { name: 'Calico cat', dir: 'ThreeColor/', scale: 4,
+        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
+      { name: 'Odd-eyed cat', dir: 'White-DifferentEyes/', scale: 4,
+        files: { idle: 'IdleCatttt', run: 'RunCatttt', sit: 'Sittingggg', sleep: 'SleepCatttt', jump: 'JumpCattttt', attack: 'AttackCattt' } },
+    ];
+
+    // "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps)
+    const ANIM_SPEED = { idle: 0.1, run: 0.22, sit: 0.07, sleep: 0.04, jump: 0.25, attack: 0.25, happy: 0.12 };
+
+    // frame = [x, y, w, h] of the first frame; `frames` more follow every `stride` px.
+    // kind = how cats use it (see USES below).
+    const ITEM = 'sprite/CatItems/';
+    const cells = (group, file, cols, size, names, props) => names.map((name, i) => ({
+      group, name, src: ITEM + file, ...props,
+      frame: [(i % cols) * size, Math.floor(i / cols) * size, size, size],
+    }));
+    const ITEMS = [
+      ...cells('Food', 'CatToys/CatBowls.png', 2, 16, ['Green bowl', 'Blue bowl', 'Purple bowl', 'Red bowl'], { kind: 'bowl', scale: 3 }),
+      ...cells('Food', 'CatToys/fish.png', 2, 16, ['Blue fish', 'Orange fish', 'Silver fish', 'Yellow fish'], { kind: 'fish', scale: 3 }),
+      ...cells('Food', 'CatToys/catfood.png', 1, 32, ['Bag of cat food'], { kind: 'bag', scale: 2 }),
+      ...['Blue', 'Orange', 'Pink'].map(c => ({
+        group: 'Toys', name: `${c} ball`, src: `${ITEM}CatToys/${c}Ball-Sheet.png`, kind: 'ball', scale: 4, frame: [0, 0, 24, 16] })),
+      { group: 'Toys', name: 'Toy mouse', src: ITEM + 'CatToys/Mouse-Sheet.png', kind: 'mouse', scale: 2, frame: [0, 0, 32, 32], frames: 4, stride: 42 },
+      { group: 'Toys', name: 'Feather wand', src: ITEM + 'CatToys/CatToy.png', kind: 'wand', scale: 3, frame: [0, 0, 32, 32], frames: 6 },
+      ...['Blue', 'Brown', 'Green', 'Pink', 'Purple', 'Red'].flatMap(c =>
+        cells('Beds', `Beds/CatBed${c}.png`, 1, 64, [`${c} bed`], { kind: 'bed', scale: 3 })),
+      ...cells('Hideaways', 'Beds/CatHomes.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3 }),
+      ...cells('Hideaways', 'Beds/CatBoxes.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
+        'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3 }),
+      ...cells('Furniture', 'CatToys/toyss.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
+      ...cells('Furniture', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 3 }),
+      ...cells('Furniture', 'PlayGrounds/CatPlayGroundLighter.png', 1, 128, ['Light cat tree'], { kind: 'tree', scale: 3 }),
+    ];
+    const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS];
+
+    // Platform tops on the cat tree sheet, in sheet pixels [x, y].
+    const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
+
+    // What the scene looks like at first.
+    const START = [
+      ['Cream cat', .5, .55], ['Blue bowl', .15, .8], ['Blue bed', .85, .85],
+      ['Blue ball', .38, .75], ['Green scratcher', .68, .45], ['Toy mouse', .22, .4],
+    ];
 
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
     const rand = (min, max) => min + Math.random() * (max - min);
+    const pick = list => list[Math.floor(Math.random() * list.length)];
+    const clampTo = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+    const every = (sec, fn) => { let t = sec; return dt => { if ((t -= dt) <= 0) { t = sec; fn(); } }; };
+    const isOver = (el, ev) => {
+      const r = el.getBoundingClientRect();
+      return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+    };
 
-    // Cut a horizontal strip into individual frame textures.
+    // Cut `count` frames (w×h, every `stride` px to the right) out of a sheet.
+    // Also finds the bounds of the opaque pixels across all frames so the
+    // sprite can be anchored at its feet – centred on the body, bottom on the
+    // lowest pixel. That keeps every animation standing on the same spot
+    // instead of hopping around when it switches or flips direction.
     // Done once at load time, never per frame.
-    function sliceFrames(texture, count) {
-      texture.source.scaleMode = 'nearest';          // crisp pixels, no blur
-      const w = Math.floor(texture.width / count);
-      const h = texture.height;
-      const frames = [];
+    function cut(texture, [x, y, w, h], count = 1, stride = w) {
+      const img = texture.source.resource;
+      const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height })
+        .getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+
+      let left = w, right = -1, top = h, bottom = -1;
+      const textures = [];
       for (let i = 0; i < count; i++) {
-        frames.push(new PIXI.Texture({
-          source: texture.source,
-          frame: new PIXI.Rectangle(i * w, 0, w, h),
-        }));
-      }
-      return frames;
-    }
-
-    // The cat isn't drawn in the same spot in every sheet (e.g. the running
-    // frames float a few pixels above the bottom edge). Scan the opaque pixels
-    // of all frames once and return an anchor at the cat's feet: horizontally
-    // centred on the body, vertically on the lowest pixel. This keeps the cat
-    // standing on the floor and stops it jumping sideways when it switches
-    // animation or flips direction.
-    function feetAnchor(texture, count) {
-      const w = Math.floor(texture.width / count);
-      const h = texture.height;
-      const canvas = document.createElement('canvas');
-      canvas.width = w * count;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(texture.source.resource, 0, 0);
-      const { data } = ctx.getImageData(0, 0, canvas.width, h);
-
-      let left = w, right = -1, bottom = -1;
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < canvas.width; x++) {
-          if (data[(y * canvas.width + x) * 4 + 3] === 0) continue;
-          const fx = x % w;                                // x within its frame
-          if (fx < left) left = fx;
-          if (fx > right) right = fx;
-          bottom = y;
+        const fx = x + i * stride;
+        textures.push(new PIXI.Texture({ source: texture.source, frame: new PIXI.Rectangle(fx, y, w, h) }));
+        const { data } = ctx.getImageData(fx, y, w, h);
+        for (let p = 0; p < w * h; p++) {
+          if (!data[p * 4 + 3]) continue;
+          const px = p % w, py = Math.floor(p / w);
+          left = Math.min(left, px); right = Math.max(right, px);
+          top = Math.min(top, py); bottom = Math.max(bottom, py);
         }
       }
-      if (bottom < 0) return { x: 0.5, y: 1 };             // fully transparent sheet
-      return { x: (left + right + 1) / 2 / w, y: (bottom + 1) / h };
+      if (bottom < 0) [left, right, top, bottom] = [0, w - 1, 0, h - 1];   // fully transparent
+      const foot = { x: (left + right + 1) / 2, y: bottom + 1 };
+      return {
+        textures, img, foot,
+        anchor: { x: foot.x / w, y: foot.y / h },
+        crop: [x + left, y + top, right - left + 1, bottom - top + 1],     // opaque part of frame 0
+      };
     }
 
-    async function loadFrames() {
-      const entries = Object.entries(ANIMATIONS);
-      const textures = await Promise.all(
-        entries.map(([, a]) => PIXI.Assets.load(SPRITE_DIR + a.file))
-      );
-      const out = {};
-      entries.forEach(([name, a], i) => {
-        if (!textures[i]) throw new Error(`Could not load ${SPRITE_DIR + a.file}`);
-        out[name] = {
-          textures: sliceFrames(textures[i], a.frames),
-          anchor: feetAnchor(textures[i], a.frames),
-        };
-      });
-      return out;
+    // A small <canvas> picture of a catalogue entry, `k` CSS px per sprite px.
+    function thumb(def, k) {
+      const [x, y, w, h] = def.look.crop;
+      const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+      c.getContext('2d').drawImage(def.look.img, x, y, w, h, 0, 0, w, h);
+      c.style.width = `${w * k}px`;
+      c.style.height = `${h * k}px`;
+      if (k < 1) c.style.imageRendering = 'auto';           // shrinking: smooth beats jagged
+      return c;
     }
+    const fitScale = (def, box) => {
+      const k = box / Math.max(def.look.crop[2], def.look.crop[3]);
+      return k >= 1 ? Math.floor(k) : k;
+    };
 
     function showError(err) {
       console.error(err);
       const el = document.createElement('div');
       el.style.cssText =
         'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
-        'padding:24px;box-sizing:border-box;text-align:center;color:#f2f2f7;' +
-        'font:16px/1.5 system-ui,sans-serif;';
+        'padding:24px;text-align:center;color:#f2f2f7;background:#1b1b24;font:16px/1.5 system-ui,sans-serif;';
       el.textContent = location.protocol === 'file:'
         ? 'Images can\'t load when this page is opened straight from disk. Serve the folder with a local server (e.g. VS Code Live Server, "npx serve", or "python -m http.server") and open it via http://localhost.'
-        : `${err.message}. Check that the image files are in "${SPRITE_DIR}" and match the names in ANIMATIONS.`;
+        : `${err.message}. Check that the image files are in the "sprite" folder and match the names in the catalogue.`;
       document.body.appendChild(el);
+    }
+
+    // ------------------------------------------------------------------
+    // App + loading
+    // ------------------------------------------------------------------
+    const sceneEl = document.getElementById('scene');
+    const paletteEl = document.getElementById('palette');
+    const trashEl = document.getElementById('trash');
+    const dialog = document.getElementById('confirm');
+
+    PIXI.TextureStyle.defaultOptions.scaleMode = 'nearest';    // crisp pixel art everywhere
+
+    const app = new PIXI.Application();
+    await app.init({
+      resizeTo: sceneEl,
+      backgroundAlpha: 0,                                 // the floor is drawn by CSS
+      antialias: false,
+      autoDensity: true,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      roundPixels: true,
+      powerPreference: 'high-performance',
+    });
+    sceneEl.appendChild(app.canvas);
+    new ResizeObserver(() => app.queueResize()).observe(sceneEl);
+
+    async function loadArt() {
+      const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
+      const tex = await PIXI.Assets.load([...new Set(CATALOG.flatMap(urlsOf))]);
+      for (const d of CATALOG) {
+        if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
+        d.anim = {};
+        for (const [name, file] of Object.entries(d.files)) {
+          const t = tex[`sprite/${d.dir}${file}.png`];
+          d.anim[name] = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height));
+        }
+        d.look = d.anim.idle;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Scene + entities
+    // ------------------------------------------------------------------
+    // Every cat and object is an entity standing on the floor at (x, y) – its
+    // feet. `lift` raises the picture without moving it on the floor (a ball's
+    // hop, a cat up the cat tree) and things further down the screen are drawn
+    // in front.
+    const entities = [];
+    const shadows = new PIXI.Container();
+    const world = new PIXI.Container({ sortableChildren: true });
+    const fx = new PIXI.Container();
+    app.stage.addChild(shadows, world, fx);
+    const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
+    const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
+
+    const unit = () => (app.screen.width < 700 ? 0.5 : 1);  // smaller sprites on phones
+
+    function spawn(def, x, y) {
+      const sprite = new PIXI.AnimatedSprite(def.look.textures);
+      sprite.anchor.copyFrom(def.look.anchor);
+      sprite.eventMode = 'static';
+      sprite.cursor = 'grab';
+      const e = { def, kind: def.kind, sprite, x, y, lift: 0, z: 0, vx: 0, vy: 0,
+                  dir: def.kind === 'cat' && Math.random() < 0.5 ? -1 : 1 };
+      sprite.on('pointerdown', ev => startDrag({ e }, ev));
+      world.addChild(sprite);
+      if (HAS_SHADOW.has(def.kind)) shadows.addChild(e.shadow = new PIXI.Graphics(shadowShape));
+      fit(e);
+      clamp(e);
+      entities.push(e);
+      INIT[def.kind]?.(e);
+      return e;
+    }
+
+    const INIT = {
+      cat: c => {
+        c.needs = { hunger: rand(.2, .5), tired: rand(0, .3), bored: rand(.4, .7), lonely: rand(0, .3) };
+        c.speed = rand(220, 290);
+        act(c, 'idle', rand(1, 2));
+      },
+      bowl: b => setFood(b, 3),
+      mouse: m => { m.sprite.animationSpeed = 0.25; m.time = 0; m.stun = 0; },
+      wand: w => { w.sprite.animationSpeed = 0.2; w.wiggle = 0; },
+      ball: b => { b.hop = 0; },
+    };
+
+    function remove(e) {
+      if (e.dead) return;
+      e.dead = true;
+      entities.splice(entities.indexOf(e), 1);
+      if (e.kind === 'cat') settle(e);
+      else if (e.user) think(e.user);            // whoever was using it finds something else to do
+      emote(e, '💨');
+      e.sprite.destroy();
+      e.shadow?.destroy();
+    }
+
+    // Size and on-screen extents; re-run when the screen crosses the phone breakpoint.
+    function fit(e) {
+      const [, , w, h] = e.def.look.crop;
+      e.s = Math.max(1, Math.round(e.def.scale * unit()));
+      e.half = (w * e.s) / 2;
+      e.tall = h * e.s;
+      e.shadow?.scale.set(e.half * 0.8);
+    }
+
+    function bounds(e) {
+      const { width, height } = app.screen;
+      return [e.half, Math.max(e.half, width - e.half), e.tall, Math.max(e.tall, height - 4)];
+    }
+    function clamp(e) {
+      const [x0, x1, y0, y1] = bounds(e);
+      e.x = clampTo(e.x, x0, x1);
+      e.y = clampTo(e.y, y0, y1);
+    }
+
+    function draw(e) {
+      const up = held(e);
+      e.sprite.position.set(e.x, e.y - e.lift - (up ? 12 : 0));
+      e.sprite.scale.set(e.dir * e.s, e.s);
+      e.sprite.zIndex = up ? 1e9 : e.y + e.z;
+      if (e.shadow) {
+        e.shadow.position.set(e.x, e.y);
+        e.shadow.visible = e.sprite.visible;
+      }
+    }
+
+    // Floating emoji above an entity (❤️ 💤 ❗ …).
+    const emotes = [];
+    const EMOTE_STYLE = new PIXI.TextStyle({ fontSize: 22 });
+    function emote(e, text) {
+      const t = new PIXI.Text({ text, style: EMOTE_STYLE, anchor: 0.5 });
+      t.position.set(e.x, e.y - e.lift - e.tall - 8);
+      fx.addChild(t);
+      emotes.push({ t, age: 0 });
+    }
+    function updateEmotes(dt) {
+      for (let i = emotes.length - 1; i >= 0; i--) {
+        const m = emotes[i];
+        m.age += dt;
+        m.t.y -= 28 * dt;
+        m.t.alpha = Math.max(0, 1 - m.age / 1.5);
+        if (m.age >= 1.5) { m.t.destroy(); emotes.splice(i, 1); }
+      }
+    }
+
+    const nearest = (from, list, jitter = 0) => {
+      let best = null, bestD = Infinity;
+      for (const e of list) {
+        const d = Math.hypot(e.x - from.x, e.y - from.y) * (1 + Math.random() * jitter);
+        if (d < bestD) { best = e; bestD = d; }
+      }
+      return best;
+    };
+    const face = (a, b) => { if (Math.abs(b.x - a.x) > 1) a.dir = Math.sign(b.x - a.x); };
+    const besideX = (cat, item) => item.x + (cat.x < item.x ? -1 : 1) * (item.half + cat.half * 0.4);
+
+    // ------------------------------------------------------------------
+    // Cat brain
+    // ------------------------------------------------------------------
+    // Needs run from 0 (content) to 1 (desperate) and creep up every second.
+    // Whenever a cat finishes something it serves its most pressing need with
+    // the nearest suitable object (or another cat), otherwise it wanders and
+    // lounges. A cat is always either acting (an animation for a while) or
+    // moving (to a spot, or chasing something), then runs `next`.
+    const NEED_RATE = { hunger: 1 / 100, tired: 1 / 140, bored: 1 / 40, lonely: 1 / 70 };
+    const relieve = (cat, need, amount) => { cat.needs[need] = Math.max(0, cat.needs[need] - amount); };
+
+    // How cats use each kind of object. solo = one cat at a time,
+    // chase = it moves so the cat follows it, spot = where to stand.
+    const USES = {
+      bowl:    { need: 'hunger', solo: true, ok: b => b.food > 0, use: eat },
+      fish:    { need: 'hunger', solo: true, use: eat },
+      bed:     { need: 'tired', solo: true, spot: (cat, bed) => bed.x,
+                 use: (cat, bed) => { cat.lift = 7 * bed.s; cat.z = 1; nap(cat); } },
+      hideout: { need: 'tired', solo: true, spot: (cat, home) => home.x, use: hide },
+      post:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5)) },
+      wand:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3.5, () => relieve(cat, 'bored', 0.6)) },
+      tree:    { need: 'bored', solo: true, use: climb, spot: (cat, tree) => {
+                 cat.perch = pick(PERCHES);
+                 return tree.x + (cat.perch[0] - tree.def.look.foot.x) * tree.s;
+               } },
+      ball:    { need: 'bored', chase: true, use: kick },
+      mouse:   { need: 'bored', chase: true, use: pounce },
+    };
+
+    function usable(item, cat) {
+      const how = USES[item.kind];
+      return !!how && !held(item) && !(how.solo && item.user && item.user !== cat) && (how.ok?.(item) ?? true);
+    }
+    // Awake, on the floor and not tied up with an object.
+    const free = c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep' && !c.using;
+
+    function play(cat, name) {
+      const a = cat.def.anim[name] ?? cat.def.anim.idle;
+      cat.anim = name;
+      cat.sprite.textures = a.textures;
+      cat.sprite.anchor.copyFrom(a.anchor);
+      cat.sprite.animationSpeed = ANIM_SPEED[name];
+      cat.sprite.gotoAndPlay(0);
+    }
+
+    function act(cat, anim, time, next = null, tick = null) {
+      Object.assign(cat, { mode: 'act', time, next, tick });
+      play(cat, anim);
+    }
+
+    // Run to (x, y), or after `follow` if given, then do `next`.
+    function goTo(cat, x, y, next = null, follow = null) {
+      const [x0, x1, y0, y1] = bounds(cat);
+      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow,
+                           tx: clampTo(x, x0, x1), ty: clampTo(y, y0, y1) });
+      play(cat, 'run');
+    }
+
+    // Let go of whatever the cat was doing.
+    function settle(cat) {
+      if (cat.using) cat.using.user = null;
+      cat.using = cat.follow = cat.next = cat.tick = null;
+      cat.lift = cat.z = 0;
+      if (!cat.sprite.visible) {                     // step out of a hideaway
+        cat.sprite.visible = true;
+        cat.y += 8 * unit();
+      }
+    }
+
+    function think(cat) {
+      settle(cat);
+      const urgent = Object.keys(cat.needs).filter(k => cat.needs[k] > 0.55)
+        .sort((a, b) => cat.needs[b] - cat.needs[a]);
+      for (const need of urgent) if (pursue(cat, need)) return;
+
+      if (Math.random() < 0.5) {
+        const { width, height } = app.screen;
+        goTo(cat, rand(0, width), rand(0, height), () => act(cat, 'idle', rand(1, 3)));
+      } else {
+        act(cat, pick(['idle', 'sit', 'sit']), rand(2, 5));
+      }
+    }
+
+    function pursue(cat, need) {
+      if (need === 'lonely') {
+        const friend = nearest(cat, entities.filter(c => c !== cat && free(c)));
+        if (!friend) return false;
+        goTo(cat, friend.x, friend.y, () => greet(cat, friend), friend);
+        return true;
+      }
+      const item = nearest(cat, entities.filter(e => USES[e.kind]?.need === need && usable(e, cat)), 0.5);
+      if (item) use(cat, item);
+      else if (need === 'tired') nap(cat);                       // no bed free: curl up on the floor
+      else if (need === 'hunger' && Math.random() < 0.5) {      // no food: beg by an empty bowl
+        const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && !held(e)));
+        if (!bowl) return false;
+        goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); emote(cat, '🍽️'); act(cat, 'sit', 3); });
+      } else return false;
+      return true;
+    }
+
+    function use(cat, item) {
+      settle(cat);
+      const how = USES[item.kind];
+      if (how.solo) { item.user = cat; cat.using = item; }
+      if (how.chase) return goTo(cat, item.x, item.y, () => how.use(cat, item), item);
+      const x = how.spot ? how.spot(cat, item) : besideX(cat, item);
+      goTo(cat, x, item.y + 1, () => { face(cat, item); how.use(cat, item); });
+    }
+
+    function eat(cat, food) {
+      act(cat, 'sit', 3, () => {
+        emote(cat, '😋');
+        if (food.kind === 'fish') {
+          relieve(cat, 'hunger', 0.6);
+          remove(food);
+        } else {
+          relieve(cat, 'hunger', 0.8);
+          setFood(food, food.food - 1);
+        }
+      });
+    }
+
+    function setFood(bowl, n) {
+      bowl.food = n;
+      bowl.sprite.tint = n > 0 ? 0xffffff : 0x55556a;     // greyed out = empty
+    }
+
+    const nap = cat => act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; });
+
+    function hide(cat, home) {
+      cat.sprite.visible = false;
+      act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; }, every(3, () => emote(home, '💤')));
+    }
+
+    function climb(cat, tree) {
+      const height = (tree.def.look.foot.y - cat.perch[1]) * tree.s;
+      const rise = speed => dt => { cat.lift = clampTo(cat.lift + speed * dt, 0, height); };
+      act(cat, 'jump', 0.5, () =>
+        act(cat, 'sit', rand(4, 7), () => {
+          relieve(cat, 'bored', 0.4);
+          relieve(cat, 'tired', 0.2);
+          act(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
+        }), rise(height / 0.5));
+    }
+
+    function kick(cat, ball) {
+      face(cat, ball);
+      if (held(ball)) return act(cat, 'jump', 1);          // swat at the ball you're dangling
+      const a = Math.atan2(ball.y - cat.y, ball.x - cat.x) + rand(-0.6, 0.6);
+      const v = rand(350, 600) * unit();
+      ball.vx = Math.cos(a) * v;
+      ball.vy = Math.sin(a) * v * 0.6;
+      relieve(cat, 'bored', 0.2);
+      act(cat, 'attack', 0.5, () => {
+        if (cat.needs.bored > 0.25 && !ball.dead && Math.random() < 0.7) use(cat, ball);   // after it again!
+      });
+    }
+
+    function pounce(cat, mouse) {
+      face(cat, mouse);
+      if (held(mouse)) return act(cat, 'jump', 1);
+      emote(mouse, '❗');
+      relieve(cat, 'bored', 0.4);
+      mouse.stun = 1.2;
+      fling(mouse, 450);
+      act(cat, 'attack', 0.8);
+    }
+
+    function greet(cat, friend) {
+      if (!free(friend)) return act(cat, 'sit', 2);
+      settle(friend);
+      face(cat, friend);
+      face(friend, cat);
+      const scrap = Math.random() < 0.5;                   // play-fight, or just sit together
+      for (const c of [cat, friend]) {
+        relieve(c, 'lonely', 0.7);
+        if (scrap) relieve(c, 'bored', 0.3);
+        emote(c, scrap ? '💢' : '❤️');
+        act(c, scrap ? 'attack' : 'sit', scrap ? 2 : 4);
+      }
+    }
+
+    function pet(cat) {
+      const asleep = cat.anim === 'sleep';
+      settle(cat);
+      if (asleep) {
+        emote(cat, '❗');
+        return act(cat, 'jump', 0.8);
+      }
+      emote(cat, '❤️');
+      relieve(cat, 'lonely', 0.5);
+      relieve(cat, 'bored', 0.2);
+      act(cat, cat.def.anim.happy ? 'happy' : 'jump', 1.5);
+    }
+
+    function updateCat(cat, dt) {
+      for (const k in NEED_RATE) cat.needs[k] = Math.min(1, cat.needs[k] + NEED_RATE[k] * dt);
+      cat.time -= dt;
+
+      if (cat.mode === 'act') {
+        cat.tick?.(dt);
+        if (cat.time > 0) return;
+      } else if (cat.mode === 'move') {
+        const t = cat.follow;
+        if (t?.dead || cat.time <= 0) return think(cat);       // target gone, or gave up
+        const tx = t ? t.x : cat.tx, ty = t ? t.y : cat.ty;
+        const dx = tx - cat.x, dy = ty - cat.y, dist = Math.hypot(dx, dy);
+        const reach = t ? t.half + cat.half * 0.6 : 0;
+        const step = cat.speed * unit() * dt;
+        if (dist - reach > step) {
+          cat.x += (dx / dist) * step;
+          cat.y += (dy / dist) * step;
+          if (Math.abs(dx) > 1) cat.dir = Math.sign(dx);
+          return;
+        }
+        if (!t) { cat.x = tx; cat.y = ty; }
+      }
+      // Done: run the follow-up, or work out what to do next.
+      const next = cat.next;
+      cat.mode = cat.next = cat.tick = null;
+      next?.();
+      if (!cat.mode) think(cat);
+    }
+
+    // ------------------------------------------------------------------
+    // Objects that move on their own
+    // ------------------------------------------------------------------
+    function fling(e, speed) {
+      const a = rand(0, Math.PI * 2);
+      e.vx = Math.cos(a) * speed * unit();
+      e.vy = Math.sin(a) * speed * 0.6 * unit();
+    }
+
+    // Slide by velocity and bounce off the edges of the scene.
+    function slide(e, dt, friction) {
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      const { x, y } = e;
+      clamp(e);
+      if (e.x !== x) e.vx *= -0.8;
+      if (e.y !== y) e.vy *= -0.8;
+      const f = Math.exp(-friction * dt);
+      e.vx *= f;
+      e.vy *= f;
+    }
+
+    function updateBall(b, dt) {
+      slide(b, dt, 1.2);
+      const speed = Math.hypot(b.vx, b.vy);
+      b.hop += (dt * speed) / 25;
+      b.lift = Math.abs(Math.sin(b.hop)) * Math.min(speed / 12, 24 * unit());
+    }
+
+    function updateMouse(m, dt) {
+      const u = unit();
+      if (m.stun > 0) {
+        m.stun -= dt;
+        slide(m, dt, 4);
+      } else {
+        const cat = nearest(m, entities.filter(c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep'));
+        const d = cat ? Math.max(1, Math.hypot(m.x - cat.x, m.y - cat.y)) : Infinity;
+        if (d < 170 * u) {                                     // run away from the cat
+          m.vx = ((m.x - cat.x) / d) * 210 * u;
+          m.vy = ((m.y - cat.y) / d) * 210 * u;
+          m.time = 0.5;
+        } else if ((m.time -= dt) <= 0) {                      // potter about, sometimes pause
+          m.time = rand(1, 3);
+          const a = rand(0, Math.PI * 2), v = Math.random() < 0.4 ? 0 : 70 * u;
+          m.vx = Math.cos(a) * v;
+          m.vy = Math.sin(a) * v * 0.6;
+        }
+        slide(m, dt, 0);
+      }
+      const moving = Math.hypot(m.vx, m.vy) > 5;
+      if (moving !== m.sprite.playing) moving ? m.sprite.play() : m.sprite.stop();
+      if (Math.abs(m.vx) > 5) m.dir = Math.sign(m.vx);
+    }
+
+    function updateWand(w, dt) {
+      w.wiggle -= dt;
+      const busy = w.wiggle > 0 || w.user?.mode === 'act';
+      if (busy !== w.sprite.playing) busy ? w.sprite.play() : w.sprite.gotoAndStop(0);
+    }
+
+    const UPDATE = { cat: updateCat, ball: updateBall, mouse: updateMouse, wand: updateWand };
+
+    // ------------------------------------------------------------------
+    // Clicking things
+    // ------------------------------------------------------------------
+    const CLICK = {
+      bowl: b => { setFood(b, 3); emote(b, '✨'); },                            // refill
+      bag: () => entities.filter(e => e.kind === 'bowl').forEach(CLICK.bowl),  // refill every bowl
+      ball: b => fling(b, 550),
+      mouse: m => { fling(m, 260); m.time = 1; emote(m, '❗'); },
+      wand: w => { w.wiggle = 2; },
+    };
+
+    function clickItem(item) {
+      if (item.kind === 'hideout' && item.user && !item.user.sprite.visible) return pet(item.user);   // knock knock
+      CLICK[item.kind]?.(item);
+      // …and the nearest cat that isn't busy comes over to check it out.
+      const cat = usable(item) && nearest(item, entities.filter(free));
+      if (cat) use(cat, item);
+    }
+
+    // ------------------------------------------------------------------
+    // Drag & drop – from the control bar into the scene, around the scene,
+    // and onto the trash. One pointer at a time; a press that doesn't move
+    // counts as a click.
+    // ------------------------------------------------------------------
+    let drag = null;
+    let dragMoved = false;          // lets a bar button ignore the click that ends a drag
+    const held = e => !!drag?.moved && drag.e === e;
+    const tmp = new PIXI.Point();
+    const toWorld = (clientX, clientY) => {
+      app.renderer.events.mapPositionToPoint(tmp, clientX, clientY);
+      return { x: tmp.x, y: tmp.y };
+    };
+
+    function startDrag(target, ev) {
+      if (drag || ev.button !== 0) return;
+      drag = { ...target, id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, moved: false };
+      dragMoved = false;
+      addEventListener('pointermove', onDragMove);
+      addEventListener('pointerup', endDrag);
+      addEventListener('pointercancel', endDrag);
+    }
+
+    function pickUp() {
+      const { e, def } = drag;
+      document.body.classList.add('dragging');
+      if (def) {
+        const k = Math.max(1, Math.round(def.scale * unit()));
+        drag.ghost = thumb(def, k);
+        drag.ghost.className = 'ghost';
+        drag.gw = def.look.crop[2] * k;
+        drag.gh = def.look.crop[3] * k;
+        document.body.appendChild(drag.ghost);
+        return;
+      }
+      const p = toWorld(drag.sx, drag.sy);
+      Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y, homeX: e.x, homeY: e.y });
+      if (e.kind === 'cat') {
+        settle(e);
+        e.mode = null;
+        play(e, 'jump');
+        e.sprite.gotoAndStop(3);                            // mid-leap: legs dangling
+      } else {
+        if (e.user) think(e.user);
+        e.vx = e.vy = 0;
+      }
+    }
+
+    function onDragMove(ev) {
+      if (ev.pointerId !== drag.id) return;
+      if (!drag.moved) {
+        if (Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 6) return;
+        drag.moved = dragMoved = true;
+        pickUp();
+      }
+      if (drag.e) {
+        const p = toWorld(ev.clientX, ev.clientY);
+        drag.e.x = p.x + drag.ox;
+        drag.e.y = p.y + drag.oy;
+        clamp(drag.e);
+        trashEl.classList.toggle('armed', isOver(trashEl, ev));
+      } else {
+        drag.ghost.style.transform = `translate(${ev.clientX - drag.gw / 2}px, ${ev.clientY - drag.gh}px)`;
+      }
+    }
+
+    function endDrag(ev) {
+      if (ev.pointerId !== drag.id) return;
+      removeEventListener('pointermove', onDragMove);
+      removeEventListener('pointerup', endDrag);
+      removeEventListener('pointercancel', endDrag);
+      document.body.classList.remove('dragging');
+      trashEl.classList.remove('armed');
+      const { e, def, moved, ghost, homeX, homeY } = drag;
+      drag = null;
+      ghost?.remove();
+      const cancelled = ev.type === 'pointercancel';
+
+      if (!moved) {
+        if (e && !cancelled) e.kind === 'cat' ? pet(e) : clickItem(e);
+        return;
+      }
+      if (def) {                                            // new thing from the bar
+        if (!cancelled && isOver(sceneEl, ev)) {
+          const p = toWorld(ev.clientX, ev.clientY);
+          emote(spawn(def, p.x, p.y), '✨');
+        }
+        return;
+      }
+      if (e.kind === 'cat') act(e, 'sit', 0.8);
+      if (!cancelled && isOver(trashEl, ev)) {              // put it back while we ask
+        e.x = homeX;
+        e.y = homeY;
+        confirmDelete(e);
+      }
+    }
+
+    async function confirmDelete(e) {
+      document.getElementById('confirm-name').textContent = e.def.name;
+      document.getElementById('confirm-pic').replaceChildren(thumb(e.def, fitScale(e.def, 64)));
+      dialog.returnValue = '';                              // Esc leaves this untouched
+      dialog.showModal();
+      await new Promise(resolve => dialog.addEventListener('close', resolve, { once: true }));
+      if (dialog.returnValue === 'delete') remove(e);
+    }
+
+    // ------------------------------------------------------------------
+    // Control bar
+    // ------------------------------------------------------------------
+    function buildPalette() {
+      const groups = Map.groupBy(CATALOG, d => d.group);
+      for (const [group, defs] of groups) {
+        const section = document.createElement('section');
+        section.className = 'group';
+        const title = document.createElement('h2');
+        title.textContent = group;
+        const row = document.createElement('div');
+        section.append(title, row);
+
+        for (const def of defs) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'item';
+          button.title = `${def.name} – drag into the scene, or click to add`;
+          button.setAttribute('aria-label', `Add ${def.name}`);
+          button.appendChild(thumb(def, fitScale(def, 40)));
+          button.addEventListener('pointerdown', ev => startDrag({ def }, ev));
+          button.addEventListener('click', ev => {
+            if (ev.detail && dragMoved) return;              // this click just ended a drag
+            const { width, height } = app.screen;
+            emote(spawn(def, rand(.1, .9) * width, rand(.25, .95) * height), '✨');
+          });
+          row.appendChild(button);
+        }
+        paletteEl.appendChild(section);
+      }
+      // Mouse wheel scrolls the bar sideways.
+      paletteEl.addEventListener('wheel', ev => {
+        if (ev.deltaX || !ev.deltaY) return;
+        paletteEl.scrollLeft += ev.deltaY;
+        ev.preventDefault();
+      }, { passive: false });
     }
 
     // ------------------------------------------------------------------
     // Main
     // ------------------------------------------------------------------
-    (async () => {
-      const app = new PIXI.Application();
-      await app.init({
-        resizeTo: window,                                   // full screen, auto-resizes
-        background: CONFIG.background,
-        antialias: false,                                   // not needed for pixel art
-        autoDensity: true,                                  // CSS size stays correct at any resolution
-        resolution: Math.min(window.devicePixelRatio || 1, CONFIG.maxResolution),
-        roundPixels: true,                                  // snap to whole pixels
-        powerPreference: 'high-performance',
-      });
-      document.body.appendChild(app.canvas);
+    function start() {
+      buildPalette();
+      const { width, height } = app.screen;
+      for (const [name, fx, fy] of START) spawn(CATALOG.find(d => d.name === name), width * fx, height * fy);
 
-      let frames;
-      try {
-        frames = await loadFrames();
-      } catch (err) {
-        showError(err);
-        return;
-      }
+      app.renderer.on('resize', () => entities.forEach(e => { fit(e); clamp(e); }));
 
-      // --- Scene (all objects created once, nothing is allocated per frame) ---
-      const floor = new PIXI.Graphics();
-      floor.eventMode = 'none';
-      app.stage.addChild(floor);
-
-      const cat = new PIXI.AnimatedSprite(frames.idle.textures);
-      cat.scale.set(CONFIG.scale);
-      cat.eventMode = 'none';                               // skip hit-testing, we don't need clicks
-      app.stage.addChild(cat);
-
-      // --- State machine: idle -> (run | sleep) -> idle ... ---
-      let state = 'idle';
-      let timeLeft = 0;
-      let targetX = 0;
-
-      const edgeMargin = () => cat.width / 2 + 20;
-
-      function enter(next) {
-        state = next;
-        cat.textures = frames[next].textures;
-        cat.anchor.copyFrom(frames[next].anchor);           // pivot at the cat's feet
-        cat.animationSpeed = ANIMATIONS[next].speed;
-        cat.gotoAndPlay(0);
-
-        if (next === 'idle') {
-          timeLeft = rand(2, 4);
-        } else if (next === 'sleep') {
-          timeLeft = rand(5, 9);
-        } else {
-          const min = edgeMargin();
-          const max = app.screen.width - min;
-          targetX = rand(min, max);
-          if (Math.abs(targetX - cat.x) < 200) {            // make sure it's a worthwhile trip
-            targetX = cat.x < app.screen.width / 2 ? max : min;
-          }
-          // Sprites are drawn facing right; flip to face left.
-          cat.scale.x = (targetX >= cat.x ? 1 : -1) * CONFIG.scale;
-        }
-      }
-
-      // --- Layout (runs on start and on every resize, not per frame) ---
-      function layout() {
-        const { width, height } = app.screen;
-        const floorY = Math.round(height * CONFIG.floorRatio);
-
-        floor.clear().rect(0, floorY, width, height - floorY).fill(CONFIG.floorColor);
-
-        const m = edgeMargin();
-        cat.y = floorY;
-        cat.x = Math.min(Math.max(cat.x, m), Math.max(m, width - m));
-        targetX = Math.min(Math.max(targetX, m), Math.max(m, width - m));
-      }
-
-      cat.x = app.screen.width / 2;
-      layout();
-      enter('idle');
-      app.renderer.on('resize', layout);
-
-      // --- Game loop: frame-rate independent via deltaMS ---
-      // Pixi clamps long gaps (e.g. a hidden tab) so the cat never teleports.
+      // Frame-rate independent via deltaMS; capped so a hidden tab doesn't teleport things.
       app.ticker.add(({ deltaMS }) => {
-        const dt = deltaMS / 1000;
-
-        if (state === 'run') {
-          const dist = targetX - cat.x;
-          const step = CONFIG.runSpeed * dt;
-          if (Math.abs(dist) <= step) {
-            cat.x = targetX;
-            enter('idle');
-          } else {
-            cat.x += Math.sign(dist) * step;
-          }
-          return;
-        }
-
-        timeLeft -= dt;
-        if (timeLeft <= 0) {
-          enter(state === 'sleep' ? 'idle' : (Math.random() < 0.6 ? 'run' : 'sleep'));
-        }
+        const dt = Math.min(deltaMS / 1000, 0.1);
+        for (const e of [...entities]) if (!e.dead && !held(e)) UPDATE[e.kind]?.(e, dt);
+        for (const e of entities) draw(e);
+        updateEmotes(dt);
       });
-    })();
+    }
+
+    loadArt().then(start, showError);
   </script>
 </body>
 </html>
