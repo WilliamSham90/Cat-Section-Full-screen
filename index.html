@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cat Window Project</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #1b1b24;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+  <script>
+    // ------------------------------------------------------------------
+    // Config – edit file names / frame counts here if yours differ
+    // ------------------------------------------------------------------
+    const CONFIG = {
+      background: '#1b1b24',
+      floorColor: 0x262633,
+      floorRatio: 0.8,     // floor sits at 80% of the screen height
+      scale: 4,            // keep this an integer for crisp pixel art
+      runSpeed: 320,       // pixels per second
+      maxResolution: 2,    // caps pixel density so 4K/retina screens stay fast
+    };
+
+    // Each image is a single horizontal strip of equally sized frames.
+    // animationSpeed is "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps).
+    const ANIMATIONS = {
+      idle:  { file: 'idle.png',  frames: 6, speed: 0.10 },
+      run:   { file: 'run.png',   frames: 6, speed: 0.22 },
+      sleep: { file: 'sleep.png', frames: 4, speed: 0.04 },
+    };
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+    const rand = (min, max) => min + Math.random() * (max - min);
+
+    // Cut a horizontal strip into individual frame textures.
+    // Done once at load time, never per frame.
+    function sliceFrames(texture, count) {
+      texture.source.scaleMode = 'nearest';          // crisp pixels, no blur
+      const w = Math.floor(texture.width / count);
+      const h = texture.height;
+      const frames = [];
+      for (let i = 0; i < count; i++) {
+        frames.push(new PIXI.Texture({
+          source: texture.source,
+          frame: new PIXI.Rectangle(i * w, 0, w, h),
+        }));
+      }
+      return frames;
+    }
+
+    async function loadFrames() {
+      const entries = Object.entries(ANIMATIONS);
+      const textures = await Promise.all(
+        entries.map(([, a]) => PIXI.Assets.load(a.file))
+      );
+      const out = {};
+      entries.forEach(([name, a], i) => {
+        if (!textures[i]) throw new Error(`Could not load ${a.file}`);
+        out[name] = sliceFrames(textures[i], a.frames);
+      });
+      return out;
+    }
+
+    function showError(err) {
+      console.error(err);
+      const el = document.createElement('div');
+      el.style.cssText =
+        'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+        'padding:24px;box-sizing:border-box;text-align:center;color:#f2f2f7;' +
+        'font:16px/1.5 system-ui,sans-serif;';
+      el.textContent = location.protocol === 'file:'
+        ? 'Images can\'t load when this page is opened straight from disk. Serve the folder with a local server (e.g. VS Code Live Server, "npx serve", or "python -m http.server") and open it via http://localhost.'
+        : `${err.message}. Check that the image files sit next to index.html and match the names in ANIMATIONS.`;
+      document.body.appendChild(el);
+    }
+
+    // ------------------------------------------------------------------
+    // Main
+    // ------------------------------------------------------------------
+    (async () => {
+      const app = new PIXI.Application();
+      await app.init({
+        resizeTo: window,                                   // full screen, auto-resizes
+        background: CONFIG.background,
+        antialias: false,                                   // not needed for pixel art
+        autoDensity: true,                                  // CSS size stays correct at any resolution
+        resolution: Math.min(window.devicePixelRatio || 1, CONFIG.maxResolution),
+        roundPixels: true,                                  // snap to whole pixels
+        powerPreference: 'high-performance',
+      });
+      document.body.appendChild(app.canvas);
+
+      let frames;
+      try {
+        frames = await loadFrames();
+      } catch (err) {
+        showError(err);
+        return;
+      }
+
+      // --- Scene (all objects created once, nothing is allocated per frame) ---
+      const floor = new PIXI.Graphics();
+      floor.eventMode = 'none';
+      app.stage.addChild(floor);
+
+      const cat = new PIXI.AnimatedSprite(frames.idle);
+      cat.anchor.set(0.5, 1);                               // pivot at bottom-centre (feet)
+      cat.scale.set(CONFIG.scale);
+      cat.eventMode = 'none';                               // skip hit-testing, we don't need clicks
+      app.stage.addChild(cat);
+
+      // --- State machine: idle -> (run | sleep) -> idle ... ---
+      let state = 'idle';
+      let timeLeft = 0;
+      let targetX = 0;
+
+      const edgeMargin = () => cat.width / 2 + 20;
+
+      function enter(next) {
+        state = next;
+        cat.textures = frames[next];
+        cat.animationSpeed = ANIMATIONS[next].speed;
+        cat.gotoAndPlay(0);
+
+        if (next === 'idle') {
+          timeLeft = rand(2, 4);
+        } else if (next === 'sleep') {
+          timeLeft = rand(5, 9);
+        } else {
+          const min = edgeMargin();
+          const max = app.screen.width - min;
+          targetX = rand(min, max);
+          if (Math.abs(targetX - cat.x) < 200) {            // make sure it's a worthwhile trip
+            targetX = cat.x < app.screen.width / 2 ? max : min;
+          }
+          // Sprites are drawn facing right; flip to face left.
+          cat.scale.x = (targetX >= cat.x ? 1 : -1) * CONFIG.scale;
+        }
+      }
+
+      // --- Layout (runs on start and on every resize, not per frame) ---
+      function layout() {
+        const { width, height } = app.screen;
+        const floorY = Math.round(height * CONFIG.floorRatio);
+
+        floor.clear().rect(0, floorY, width, height - floorY).fill(CONFIG.floorColor);
+
+        const m = edgeMargin();
+        cat.y = floorY;
+        cat.x = Math.min(Math.max(cat.x, m), Math.max(m, width - m));
+        targetX = Math.min(Math.max(targetX, m), Math.max(m, width - m));
+      }
+
+      cat.x = app.screen.width / 2;
+      layout();
+      enter('idle');
+      app.renderer.on('resize', layout);
+
+      // --- Game loop: frame-rate independent via deltaMS ---
+      // Pixi clamps long gaps (e.g. a hidden tab) so the cat never teleports.
+      app.ticker.add(({ deltaMS }) => {
+        const dt = deltaMS / 1000;
+
+        if (state === 'run') {
+          const dist = targetX - cat.x;
+          const step = CONFIG.runSpeed * dt;
+          if (Math.abs(dist) <= step) {
+            cat.x = targetX;
+            enter('idle');
+          } else {
+            cat.x += Math.sign(dist) * step;
+          }
+          return;
+        }
+
+        timeLeft -= dt;
+        if (timeLeft <= 0) {
+          enter(state === 'sleep' ? 'idle' : (Math.random() < 0.6 ? 'run' : 'sleep'));
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
