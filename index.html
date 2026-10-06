@@ -42,21 +42,36 @@
       flex: 1;
       min-width: 0;                   /* let it scroll instead of widening the page */
       display: flex;
-      gap: 20px;
+      align-items: center;
+      gap: 8px;
       overflow-x: auto;
       scrollbar-width: thin;
       padding-bottom: 2px;
     }
-    .group { display: flex; flex-direction: column; gap: 4px; }
-    .group h2 {
-      margin: 0;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      color: var(--muted);
+    .group, .group > div { display: flex; gap: 6px; }
+    .group > div[hidden] { display: none; }
+
+    /* A group's button: picture, name, and + (closed) or − (open). */
+    .toggle {
+      flex: none;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px 0 8px;
+      background: var(--slot);
+      border: 2px solid transparent;
+      border-radius: 10px;
+      color: var(--text);
+      font: 600 12px/1 system-ui, sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
     }
-    .group > div { display: flex; gap: 6px; }
+    .toggle:hover { background: var(--slot-hover); }
+    .toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .toggle[aria-expanded="true"] { border-color: var(--focus); }
+    .toggle canvas { image-rendering: pixelated; pointer-events: none; }
+    .toggle .sign { width: 12px; font-size: 18px; color: var(--muted); text-align: center; }
     .item {
       flex: none;
       width: 52px;
@@ -114,7 +129,9 @@
     #scene {
       position: relative;
       min-height: 0;
-      background: radial-gradient(ellipse at 50% 55%, #302c3e, var(--bg) 70%);
+      background: var(--bg) center / cover no-repeat;      /* the sky picture is set from the clock */
+      image-rendering: pixelated;
+      transition: background-image 1.5s;
     }
     #scene canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 
@@ -176,7 +193,8 @@
 
     @media (max-width: 600px) {
       .bar { gap: 8px; padding: 6px 8px; }
-      .group h2 { display: none; }
+      .toggle { height: 44px; padding: 0 6px; }
+      .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
       .tools { gap: 6px; }
       .tool, .trash { width: 56px; }
@@ -184,8 +202,8 @@
   </style>
 </head>
 <body>
-  <header class="bar" aria-label="Add cats and objects: drag one into the scene, or click it">
-    <div class="palette" id="palette"></div>
+  <header class="bar" aria-label="Add cats and objects: open a group, then drag an item into the room or click it">
+    <nav class="palette" id="palette" aria-label="Items"></nav>
     <div class="tools">
       <button type="button" class="tool" id="room-button" title="Choose a room" aria-haspopup="dialog">
         <span id="room-pic" aria-hidden="true"></span>
@@ -355,6 +373,16 @@
       width: 10,
       length: 40,
     };
+
+    // The sky behind the room follows the viewer's clock: each picture shows
+    // from the local hour `from` until the next one starts.
+    const SKIES = [
+      { from: 4, src: 'backgrounds/fajrbackground.png' },          // before sunrise
+      { from: 6, src: 'backgrounds/dawnbackground.png' },
+      { from: 9, src: 'backgrounds/noonbackground.png' },
+      { from: 17, src: 'backgrounds/sunsetbackground.png' },
+      { from: 20, src: 'backgrounds/nightbackgroundwithmoon.png' },
+    ];
 
     // What the room looks like at first. Positions are fractions of the
     // floor's width (left → right) and depth (back → front).
@@ -1222,18 +1250,69 @@
       populate();
     }
 
+    function updateSky(now = new Date()) {
+      const hour = now.getHours() + now.getMinutes() / 60;
+      const { src } = SKIES.findLast(sky => hour >= sky.from) ?? SKIES.at(-1);   // before 4am: still night
+      if (sceneEl.dataset.sky === src) return;
+      sceneEl.dataset.sky = src;
+      sceneEl.style.backgroundImage = `url("${src}")`;
+    }
+
     // ------------------------------------------------------------------
     // Control bar
     // ------------------------------------------------------------------
+    // A button that opens and closes a group of items.
+    function makeToggle(name, label, def) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'toggle';
+      button.setAttribute('aria-label', name);
+      if (def) button.appendChild(thumb(def, fitScale(def, 28)));
+      const text = Object.assign(document.createElement('span'), { className: 'label', textContent: label });
+      const sign = Object.assign(document.createElement('span'), { className: 'sign', textContent: '+' });
+      sign.setAttribute('aria-hidden', 'true');
+      button.append(text, sign);
+      return button;
+    }
+
+    // Each group of items sits behind its own button: + opens it, − closes
+    // it. Opening one group closes the others; "All" opens or closes them all.
     function buildPalette() {
-      const groups = Map.groupBy(CATALOG, d => d.group);
-      for (const [group, defs] of groups) {
+      const groups = [];
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      const setOpen = (g, open) => {
+        g.row.hidden = !open;
+        g.toggle.setAttribute('aria-expanded', String(open));
+        g.toggle.querySelector('.sign').textContent = open ? '−' : '+';
+      };
+      const allButton = makeToggle('All items', 'All', null);
+      const syncAll = () => {
+        const open = groups.every(g => !g.row.hidden);
+        allButton.setAttribute('aria-expanded', String(open));
+        allButton.querySelector('.sign').textContent = open ? '−' : '+';
+      };
+      paletteEl.appendChild(allButton);
+
+      for (const [group, defs] of Map.groupBy(CATALOG, d => d.group)) {
         const section = document.createElement('section');
         section.className = 'group';
-        const title = document.createElement('h2');
-        title.textContent = group;
         const row = document.createElement('div');
-        section.append(title, row);
+        row.id = `group-${group.toLowerCase()}`;
+        const toggle = makeToggle(group, group, defs[0]);
+        toggle.setAttribute('aria-controls', row.id);
+        section.append(toggle, row);
+        const g = { toggle, row };
+        groups.push(g);
+
+        toggle.addEventListener('click', () => {
+          const open = row.hidden;
+          for (const other of groups) setOpen(other, open && other === g);
+          syncAll();
+          if (open) {                                      // bring the opened group into view
+            const left = section.getBoundingClientRect().left - paletteEl.getBoundingClientRect().left;
+            paletteEl.scrollTo({ left: paletteEl.scrollLeft + left - 8, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+          }
+        });
 
         for (const def of defs) {
           const button = document.createElement('button');
@@ -1252,6 +1331,15 @@
         }
         paletteEl.appendChild(section);
       }
+
+      allButton.setAttribute('aria-controls', groups.map(g => g.row.id).join(' '));
+      allButton.addEventListener('click', () => {
+        const open = groups.some(g => g.row.hidden);
+        for (const g of groups) setOpen(g, open);
+        syncAll();
+      });
+      groups.forEach((g, i) => setOpen(g, i === 0));       // start with the cats showing
+      syncAll();
       // Mouse wheel scrolls the bar sideways.
       paletteEl.addEventListener('wheel', ev => {
         if (ev.deltaX || !ev.deltaY) return;
@@ -1265,6 +1353,8 @@
     // ------------------------------------------------------------------
     function start() {
       buildPalette();
+      updateSky();
+      setInterval(updateSky, 60_000);
       setRoom(DEFAULT_ROOM);
       layout();
       populate();
