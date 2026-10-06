@@ -115,7 +115,7 @@
     }
     .tool:hover { background: var(--slot-hover); }
     .tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .tool canvas { display: block; width: 32px; height: 28px; }
+    .tool canvas, .tool .sky-thumb { display: block; width: 32px; height: 28px; }
     .dragging .tool { pointer-events: none; }
     .dragging .trash { border-color: var(--muted); }
     .trash.armed {
@@ -165,9 +165,9 @@
     .actions button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
-    /* ---- Room picker ---- */
-    #rooms { width: min(560px, calc(100vw - 32px)); }
-    #rooms h2 { margin: 0 0 14px; font-size: 16px; }
+    /* ---- Room and sky pickers ---- */
+    .picker { width: min(560px, calc(100vw - 32px)); }
+    .picker h2 { margin: 0 0 14px; font-size: 16px; }
     .room-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
@@ -189,15 +189,41 @@
     .room-grid button:hover { background: var(--slot-hover); color: var(--text); }
     .room-grid button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .room-grid button[aria-current="true"] { border-color: var(--focus); color: var(--text); }
-    .room-grid canvas { width: 64px; height: 56px; }
+    .room-grid canvas, .room-grid .sky-thumb { width: 64px; height: 56px; }
+    .sky-thumb {
+      border-radius: 6px;
+      background: var(--bg) center / cover no-repeat;
+      image-rendering: pixelated;
+    }
+
+    /* ---- Signature ---- */
+    .signature {
+      position: fixed;
+      right: 12px;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 5;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin: 0;
+      padding: 4px 12px 6px;
+      border-radius: 999px;
+      background: rgb(27 27 36 / .6);
+      color: var(--text);
+      font-size: 11px;
+      pointer-events: none;                 /* never gets in the way of dragging */
+    }
+    .signature .name {
+      font: 20px/1 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive;
+    }
 
     @media (max-width: 600px) {
       .bar { gap: 8px; padding: 6px 8px; }
       .toggle { height: 44px; padding: 0 6px; }
       .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
-      .tools { gap: 6px; }
-      .tool, .trash { width: 56px; }
+      .tools { gap: 4px; }
+      .tool, .trash { width: 50px; }
     }
   </style>
 </head>
@@ -208,6 +234,10 @@
       <button type="button" class="tool" id="room-button" title="Choose a room" aria-haspopup="dialog">
         <span id="room-pic" aria-hidden="true"></span>
         Room
+      </button>
+      <button type="button" class="tool" id="sky-button" title="Choose the sky behind the room" aria-haspopup="dialog">
+        <span id="sky-pic" aria-hidden="true"></span>
+        Sky
       </button>
       <button type="button" class="tool" id="reset" title="Put the room back the way it started">
         <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
@@ -226,6 +256,7 @@
     </div>
   </header>
   <main id="scene"></main>
+  <footer class="signature"><span>Made by</span> <span class="name">William Sham</span></footer>
 
   <dialog id="confirm" aria-labelledby="confirm-text">
     <form method="dialog">
@@ -238,10 +269,18 @@
     </form>
   </dialog>
 
-  <dialog id="rooms" aria-labelledby="rooms-title">
+  <dialog id="rooms" class="picker" aria-labelledby="rooms-title">
     <form method="dialog">
       <h2 id="rooms-title">Choose a room</h2>
       <div class="room-grid" id="room-grid"></div>
+      <div class="actions"><button value="">Close</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="skies" class="picker" aria-labelledby="skies-title">
+    <form method="dialog">
+      <h2 id="skies-title">Choose the sky</h2>
+      <div class="room-grid" id="sky-grid"></div>
       <div class="actions"><button value="">Close</button></div>
     </form>
   </dialog>
@@ -374,15 +413,30 @@
       length: 40,
     };
 
-    // The sky behind the room follows the viewer's clock: each picture shows
-    // from the local hour `from` until the next one starts.
+    // The sky behind the room. By default it follows the viewer's clock: each
+    // picture shows from the local hour `from` until the next one starts.
+    // The Sky button can also pin one of them, or a plain dark backdrop.
     const SKIES = [
-      { from: 4, src: 'backgrounds/fajrbackground.png' },          // before sunrise
-      { from: 6, src: 'backgrounds/dawnbackground.png' },
-      { from: 9, src: 'backgrounds/noonbackground.png' },
-      { from: 17, src: 'backgrounds/sunsetbackground.png' },
-      { from: 20, src: 'backgrounds/nightbackgroundwithmoon.png' },
+      { name: 'Fajr', from: 4, src: 'backgrounds/fajrbackground.png' },          // before sunrise
+      { name: 'Dawn', from: 6, src: 'backgrounds/dawnbackground.png' },
+      { name: 'Noon', from: 9, src: 'backgrounds/noonbackground.png' },
+      { name: 'Sunset', from: 17, src: 'backgrounds/sunsetbackground.png' },
+      { name: 'Night', from: 20, src: 'backgrounds/nightbackgroundwithmoon.png' },
     ];
+    const DEFAULT_SKY = 'clock';
+
+    // Pixel effects: strips of square frames in effects/, made from the GIFs
+    // in "Pixel effects" by tools/build_effects.py. `at` is where they play on
+    // whatever they're about: above its head, or over its middle.
+    const EFFECTS = {
+      hearts: { at: 'head' }, sparkle: { at: 'body' }, sleep: { at: 'head' }, smoke: { at: 'body' },
+      alert: { at: 'head' }, scrap: { at: 'body' }, pounce: { at: 'body' }, music: { at: 'head' },
+      party: { at: 'body' },
+    };
+    const FX_SPEED = 0.25;                              // ≈ 15 fps, the speed the GIFs were made for
+    // Pop-ups shown as a pixel effect; any other emoji floats up as text.
+    const EMOTE_EFFECT = { '❤️': 'hearts', '✨': 'sparkle', '💤': 'sleep', '💨': 'smoke', '❗': 'alert',
+                           '💢': 'scrap', '😋': 'music' };
 
     // What the room looks like at first. Positions are fractions of the
     // floor's width (left → right) and depth (back → front).
@@ -550,6 +604,8 @@
     const confirmDialog = document.getElementById('confirm');
     const roomsDialog = document.getElementById('rooms');
     const roomGrid = document.getElementById('room-grid');
+    const skiesDialog = document.getElementById('skies');
+    const skyGrid = document.getElementById('sky-grid');
 
     PIXI.TextureStyle.defaultOptions.scaleMode = 'nearest';    // crisp pixel art everywhere
 
@@ -570,9 +626,14 @@
 
     async function loadArt() {
       const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
-      const urls = [...new Set([...CATALOG.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src)])];
+      const fxUrl = name => `effects/${name}.png`;
+      const urls = [...new Set([...CATALOG.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl)])];
       const tex = await PIXI.Assets.load(urls);
       for (const url of urls) art[url] = tex[url].source.resource;
+      for (const [name, effect] of Object.entries(EFFECTS)) {
+        const t = tex[fxUrl(name)];
+        effect.textures = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height)).textures;
+      }
       for (const d of CATALOG) {
         if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
         d.anim = {};
@@ -727,10 +788,29 @@
       }
     }
 
-    // Floating emoji above an entity (❤️ 💤 ❗ …).
+    // Play a pixel effect once at (x, y), then throw it away.
+    function effectAt(name, x, y) {
+      const { textures, at } = EFFECTS[name];
+      const sprite = new PIXI.AnimatedSprite({ textures, loop: false, animationSpeed: FX_SPEED });
+      sprite.anchor.set(0.5, at === 'head' ? 1 : 0.5);
+      sprite.scale.set(Math.max(1, Math.round(2 * unit())));
+      sprite.position.set(x, y);
+      sprite.eventMode = 'none';
+      sprite.onComplete = () => sprite.destroy();
+      fx.addChild(sprite);
+      sprite.play();
+    }
+
+    // A pop-up above an entity (❤️ 💤 ❗ …): a pixel effect where there is
+    // one, otherwise the emoji floating up.
     const emotes = [];
     const EMOTE_STYLE = new PIXI.TextStyle({ fontSize: 22 });
     function emote(e, text) {
+      const name = EMOTE_EFFECT[text];
+      if (name) {
+        const top = e.y - e.lift - e.tall;
+        return effectAt(name, e.x, EFFECTS[name].at === 'head' ? top : top + e.tall / 2);
+      }
       const t = new PIXI.Text({ text, style: EMOTE_STYLE, anchor: 0.5 });
       t.position.set(e.x, e.y - e.lift - e.tall - 8);
       fx.addChild(t);
@@ -919,7 +999,7 @@
     function pounce(cat, mouse) {
       face(cat, mouse);
       if (held(mouse)) return act(cat, 'jump', 1);
-      emote(mouse, '❗');
+      effectAt('pounce', mouse.x, mouse.y - mouse.tall / 2);
       relieve(cat, 'bored', 0.4);
       mouse.stun = 1.2;
       fling(mouse, 450);
@@ -1211,21 +1291,70 @@
       room.texture = PIXI.Texture.from(picture, true);
       if (old !== PIXI.Texture.EMPTY) old.destroy(true);
       document.getElementById('room-pic').replaceChildren(roomThumb(picture, 32));
-      for (const b of roomGrid.children) b.setAttribute('aria-current', String(b.value === String(i)));
+    }
+
+    // Open a picker dialog. `options` is a function returning
+    // [{ value, label, pic }], called the first time only. Resolves with the
+    // chosen value as a string, or null if it was closed without a choice.
+    async function choose(dialog, grid, options, current) {
+      if (!grid.children.length) {
+        for (const { value, label, pic } of options()) {
+          const b = document.createElement('button');
+          b.value = value;                                  // closes the dialog with this value
+          b.append(pic, label);
+          grid.appendChild(b);
+        }
+      }
+      for (const b of grid.children) b.setAttribute('aria-current', String(b.value === String(current)));
+      const choice = await showDialog(dialog);
+      return choice === '' ? null : choice;
     }
 
     async function pickRoom() {
-      if (!roomGrid.children.length) {                     // build the choices the first time only
-        ROOM_TYPES.forEach(({ name }, i) => {
-          const b = document.createElement('button');
-          b.value = i;                                      // closes the dialog with this value
-          b.setAttribute('aria-current', String(i === roomType));
-          b.append(roomThumb(buildRoom(i), 64), `${name} room`);
-          roomGrid.appendChild(b);
-        });
-      }
-      const choice = await showDialog(roomsDialog);
-      if (choice !== '') setRoom(Number(choice));
+      const choice = await choose(roomsDialog, roomGrid, () => ROOM_TYPES.map(({ name }, i) =>
+        ({ value: i, label: `${name} room`, pic: roomThumb(buildRoom(i), 64) })), roomType);
+      if (choice !== null) setRoom(Number(choice));
+    }
+
+    // ------------------------------------------------------------------
+    // Sky
+    // ------------------------------------------------------------------
+    let skyChoice = DEFAULT_SKY;                          // 'clock', 'dark' or an index into SKIES
+
+    const clockSky = (now = new Date()) => {
+      const hour = now.getHours() + now.getMinutes() / 60;
+      return SKIES.findLast(sky => hour >= sky.from) ?? SKIES.at(-1);   // before 4am: still night
+    };
+    const skySrc = now => skyChoice === 'clock' ? clockSky(now).src : skyChoice === 'dark' ? '' : SKIES[skyChoice].src;
+
+    function skyThumb(src) {
+      const pic = document.createElement('span');
+      pic.className = 'sky-thumb';
+      if (src) pic.style.backgroundImage = `url("${src}")`;
+      return pic;
+    }
+
+    // Show the chosen sky; with 'clock' this is re-run every minute.
+    function updateSky(now = new Date()) {
+      const src = skySrc(now);
+      if (sceneEl.dataset.sky === src) return;
+      sceneEl.dataset.sky = src;
+      sceneEl.style.backgroundImage = src ? `url("${src}")` : 'none';
+      document.getElementById('sky-pic').replaceChildren(skyThumb(src));
+    }
+
+    function setSky(choice) {
+      skyChoice = choice;
+      updateSky();
+    }
+
+    async function pickSky() {
+      const choice = await choose(skiesDialog, skyGrid, () => [
+        { value: 'clock', label: 'Follow the clock', pic: skyThumb(clockSky().src) },
+        ...SKIES.map(({ name, src }, i) => ({ value: i, label: name, pic: skyThumb(src) })),
+        { value: 'dark', label: 'Dark', pic: skyThumb('') },
+      ], skyChoice);
+      if (choice !== null) setSky(/^\d+$/.test(choice) ? Number(choice) : choice);
     }
 
     function populate() {
@@ -1244,18 +1373,13 @@
         e.shadow?.destroy();
       }
       entities.length = 0;
-      for (const m of emotes) m.t.destroy();
+      for (const child of fx.removeChildren()) child.destroy();   // pop-ups and effects
       emotes.length = 0;
       setRoom(DEFAULT_ROOM);
+      setSky(DEFAULT_SKY);
       populate();
-    }
-
-    function updateSky(now = new Date()) {
-      const hour = now.getHours() + now.getMinutes() / 60;
-      const { src } = SKIES.findLast(sky => hour >= sky.from) ?? SKIES.at(-1);   // before 4am: still night
-      if (sceneEl.dataset.sky === src) return;
-      sceneEl.dataset.sky = src;
-      sceneEl.style.backgroundImage = `url("${src}")`;
+      const f = floorBox();
+      effectAt('party', f.x, f.y);
     }
 
     // ------------------------------------------------------------------
@@ -1361,6 +1485,7 @@
 
       app.renderer.on('resize', layout);
       document.getElementById('room-button').addEventListener('click', pickRoom);
+      document.getElementById('sky-button').addEventListener('click', pickSky);
       document.getElementById('reset').addEventListener('click', confirmReset);
 
       // Frame-rate independent via deltaMS; capped so a hidden tab doesn't teleport things.
