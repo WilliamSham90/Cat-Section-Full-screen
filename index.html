@@ -275,6 +275,36 @@
     }
     .cat-actions img { height: 26px; width: auto; }
 
+    /* ---- Sound menu (a popover under the Sound button) ---- */
+    .sound-menu {
+      position: fixed;
+      inset: auto;
+      margin: 0;
+      width: 280px;
+      padding: 0 8px 6px;
+      overflow: visible;
+    }
+    .sound-menu h2 { margin: 0 0 8px; font-size: 20px; text-align: center; }
+    .sound-menu h3 { margin: 0; font-size: 16px; }
+    .sound-part + .sound-part { margin-top: 12px; padding-top: 10px; border-top: 2px dashed var(--sand); }
+    .sound-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .switch { min-width: 64px; height: 36px; padding: 0; font-weight: 600; }
+    .tracks { display: grid; gap: 4px; margin: 0 0 8px; padding: 0; border: 0; }
+    .tracks label {
+      display: block;
+      padding: 0 4px;
+      font-size: 14px;
+      line-height: 22px;
+      cursor: pointer;
+    }
+    .tracks input { position: absolute; opacity: 0; pointer-events: none; }
+    .tracks label:has(input:checked) { border-image-source: url("ui/tile-sand.png"); }
+    .tracks label:has(input:checked)::before { content: "♪ "; }
+    .tracks label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .volume { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .volume input { flex: 1; accent-color: var(--cocoa); }
+    #sound-button[data-music="off"] .waves { opacity: .25; }
+
     /* ---- Signature, on a cat name plate ---- */
     .signature {
       position: fixed;
@@ -287,15 +317,20 @@
       align-items: center;
       font-size: 12px;
       white-space: nowrap;
-      pointer-events: none;                 /* never gets in the way of dragging */
+      color: var(--ink);
+      text-decoration: none;
     }
+    .signature:hover .name, .signature:focus-visible .name { text-decoration: underline; text-underline-offset: 3px; }
     .signature .name {
       font: 20px/1.25 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive;
       letter-spacing: .02em;
     }
 
     @media (max-width: 600px) {
-      .bar { gap: 6px; padding: 6px 8px; }
+      /* Tools on top, the item groups get a full-width row underneath. */
+      .bar { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
+      .tools { order: -1; width: 100%; justify-content: flex-end; }
+      .palette { flex-basis: 100%; }
       .toggle { height: 44px; }
       .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
@@ -319,6 +354,13 @@
         <span id="sky-pic" aria-hidden="true"></span>
         Sky
       </button>
+      <button type="button" class="tool tile" id="sound-button" title="Music and cat sounds" popovertarget="sound-menu">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+        </svg>
+        Sound
+      </button>
       <button type="button" class="tool tile" id="reset" title="Put the room back the way it started">
         <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -336,7 +378,9 @@
     </div>
   </header>
   <main id="scene"></main>
-  <footer class="signature nameplate"><span>Made by</span> <span class="name">William Sham</span></footer>
+  <a class="signature nameplate" href="https://williamsham90.github.io/Portfolio/" target="_blank" rel="noopener">
+    <span>Made by</span> <span class="name">William Sham</span><span class="visually-hidden"> (portfolio, opens in a new tab)</span>
+  </a>
 
   <!-- Opens next to a cat when it's clicked. -->
   <div id="cat-menu" class="cat-menu panel" popover aria-label="Cat">
@@ -346,6 +390,28 @@
     </label>
     <div class="needs" id="cat-needs"></div>
     <div class="cat-actions" id="cat-actions"></div>
+  </div>
+
+  <!-- Opens under the Sound button. Music and cat sounds are switched separately. -->
+  <div id="sound-menu" class="sound-menu panel" popover aria-labelledby="sound-title">
+    <h2 id="sound-title">Sound</h2>
+    <section class="sound-part" aria-labelledby="music-title">
+      <div class="sound-row">
+        <h3 id="music-title">Music</h3>
+        <button type="button" class="tile switch" id="music-toggle" aria-pressed="false">Off</button>
+      </div>
+      <fieldset class="tracks" id="tracks">
+        <legend class="visually-hidden">Song</legend>
+      </fieldset>
+      <label class="volume">Volume <input type="range" id="music-volume" min="0" max="100" step="1"></label>
+    </section>
+    <section class="sound-part" aria-labelledby="cats-title">
+      <div class="sound-row">
+        <h3 id="cats-title">Cat sounds</h3>
+        <button type="button" class="tile switch" id="cats-toggle" aria-pressed="true">On</button>
+      </div>
+      <label class="volume">Volume <input type="range" id="cats-volume" min="0" max="100" step="1"></label>
+    </section>
   </div>
 
   <dialog id="confirm" class="panel" aria-labelledby="confirm-text">
@@ -912,6 +978,7 @@
         c.speed = rand(...CAT_SPEED);
         c.name = freshName();
         c.chat = rand(1, 8);
+        c.voice = rand(0.88, 1.18);                      // pitch of its meows
         c.tag = new PIXI.Text({ text: c.name, style: TAG_STYLE, anchor: { x: 0.5, y: 0 } });
         labels.addChild(c.tag);
         act(c, 'idle', rand(1, 2));
@@ -1028,6 +1095,7 @@
       view.pivot.set(frame.width * k - 6 * k, frame.height * k);
       talk.addChild(view);
       e.bubble = { view, age: 0, time };
+      if (e.kind === 'cat') voice(e, text);
     }
 
     function updateBubbles(dt) {
@@ -1129,7 +1197,10 @@
       bed:     { need: 'tired', solo: true, spot: (cat, bed) => bed.x,
                  use: (cat, bed) => { cat.lift = bed.def.seat * bed.s; cat.z = 1; nap(cat); } },
       hideout: { need: 'tired', solo: true, spot: (cat, home) => home.x, use: hide },
-      post:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5)) },
+      post:    { need: 'bored', solo: true, use: cat => {
+                 playSound('scratch', { rate: cat.voice, length: 2.8 });
+                 act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5));
+               } },
       wand:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3.5, () => relieve(cat, 'bored', 0.6)) },
       tree:    { need: 'bored', solo: true, use: climb, spot: (cat, tree) => {
                  cat.perch = pick(PERCHES);
@@ -2094,11 +2165,201 @@
     }
 
     // ------------------------------------------------------------------
+    // Sound – background music and cat sounds, each with its own on/off and
+    // volume, remembered in this browser. Files come from tools/build_audio.py.
+    // Everything runs through one AudioContext, started on the first click
+    // or key press as browsers require; that also makes volume work on
+    // iPhones, where <audio>.volume is ignored. Music starts off.
+    // ------------------------------------------------------------------
+    const SONGS = [
+      { id: 'forgotten-biomes', title: 'Forgotten Biomes' },
+      { id: 'polar-lights', title: 'Polar Lights' },
+      { id: 'sunlight-through-leaves', title: 'Sunlight Through Leaves' },
+      { id: 'what-clouds-are-made-of', title: 'What Clouds Are Made Of' },
+    ];
+    const SOUNDS = ['meow1', 'meow2', 'meow3', 'meow4', 'hiss', 'purr', 'scratch'];
+    const MUSIC_MAX = 0.45;                               // full slider = this gain: music stays in the background
+    const CATS_MAX = 0.9;
+    const SOUND_KEY = 'cat-room-sound';
+    const sound = { music: false, song: SONGS[0].id, musicVolume: 0.5, cats: true, catsVolume: 0.6 };
+    let audio = null;                                     // { ctx, music, cats, player, buffers } once started
+    let lastMeow = 0;
+
+    function loadSoundSettings() {
+      try { Object.assign(sound, JSON.parse(localStorage.getItem(SOUND_KEY)) ?? {}); } catch { /* private mode etc. */ }
+      if (!SONGS.some(song => song.id === sound.song)) sound.song = SONGS[0].id;
+    }
+    function saveSoundSettings() {
+      try { localStorage.setItem(SOUND_KEY, JSON.stringify(sound)); } catch { /* not saved, still works */ }
+    }
+
+    // Ease a gain to `value` instead of jumping, so nothing clicks or blasts.
+    function glide(gain, value, seconds = 0.4) {
+      const t = audio.ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(value, t + seconds);
+    }
+
+    function startAudio() {
+      if (audio) return audio.ctx.resume();
+      const ctx = new AudioContext();
+      const music = ctx.createGain();
+      const cats = ctx.createGain();
+      music.gain.value = 0;
+      cats.gain.value = sound.cats ? sound.catsVolume * CATS_MAX : 0;
+      music.connect(ctx.destination);
+      cats.connect(ctx.destination);
+      const player = new Audio();
+      player.preload = 'none';                          // songs download only when played
+      player.loop = true;
+      ctx.createMediaElementSource(player).connect(music);
+      audio = { ctx, music, cats, player, buffers: new Map() };
+      for (const name of SOUNDS) {
+        fetch(`audio/sfx/${name}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
+          .then(buffer => audio.buffers.set(name, buffer)).catch(() => {});
+      }
+      if (sound.music) playMusic();
+    }
+
+    function playMusic() {
+      if (!audio || document.hidden) return;
+      const { player } = audio;
+      const src = `audio/music/${sound.song}.mp3`;
+      if (!player.src.endsWith(src)) player.src = src;
+      player.play().then(() => glide(audio.music, sound.musicVolume * MUSIC_MAX, 2)).catch(() => {});
+    }
+    function pauseMusic() {
+      if (!audio) return;
+      glide(audio.music, 0, 0.5);
+      setTimeout(() => { if (!sound.music || document.hidden) audio.player.pause(); }, 550);
+    }
+    function changeSong(id) {
+      sound.song = id;
+      if (!audio || !sound.music) return;
+      glide(audio.music, 0, 0.4);
+      setTimeout(() => { audio.player.src = `audio/music/${id}.mp3`; playMusic(); }, 450);
+    }
+
+    // Play a cat sound. `rate` shifts the pitch (each cat has its own voice),
+    // `pan` places it left/right, `length` cuts long sounds short with a fade.
+    function playSound(name, { rate = 1, pan = 0, length = 0 } = {}) {
+      if (!audio || !sound.cats || audio.ctx.state !== 'running') return;
+      const buffer = audio.buffers.get(name);
+      if (!buffer) return;
+      const { ctx } = audio, t = ctx.currentTime;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.value = rate;
+      const fade = ctx.createGain();
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = clampTo(pan, -1, 1);
+      source.connect(fade).connect(panner).connect(audio.cats);
+      source.start(t);
+      if (length) {
+        fade.gain.setValueAtTime(1, t + Math.max(0, length - 0.8));
+        fade.gain.linearRampToValueAtTime(0, t + length);
+        source.stop(t + length);
+      }
+    }
+
+    // A cat's sound for something it says, from roughly where it is.
+    function voice(cat, text) {
+      const pan = (cat.x / app.screen.width) * 1.2 - 0.6;
+      if (text === 'Hiss!') return playSound('hiss', { rate: cat.voice, pan });
+      if (text === 'Purr~') return playSound('purr', { rate: cat.voice, pan, length: 2.6 });
+      const now = performance.now();
+      if (now - lastMeow < 400) return;                   // a room full of cats shouldn't be a wall of meows
+      lastMeow = now;
+      playSound(pick(['meow1', 'meow2', 'meow3', 'meow4']), { rate: cat.voice, pan });
+    }
+
+    // ---- The sound menu ----
+    const soundMenu = document.getElementById('sound-menu');
+    const soundButton = document.getElementById('sound-button');
+
+    function showSoundSettings() {
+      const set = (id, on) => {
+        const b = document.getElementById(id);
+        b.setAttribute('aria-pressed', String(on));
+        b.textContent = on ? 'On' : 'Off';
+      };
+      set('music-toggle', sound.music);
+      set('cats-toggle', sound.cats);
+      document.getElementById('music-volume').value = Math.round(sound.musicVolume * 100);
+      document.getElementById('cats-volume').value = Math.round(sound.catsVolume * 100);
+      for (const input of document.querySelectorAll('#tracks input')) input.checked = input.value === sound.song;
+      soundButton.dataset.music = sound.music ? 'on' : 'off';
+    }
+
+    function setMusic(on) {
+      sound.music = on;
+      startAudio();
+      on ? playMusic() : pauseMusic();
+    }
+
+    function placeSoundMenu() {
+      const r = soundButton.getBoundingClientRect(), w = soundMenu.offsetWidth;
+      soundMenu.style.left = `${clampTo(r.right - w, 8, innerWidth - w - 8)}px`;
+      soundMenu.style.top = `${r.bottom + 8}px`;
+    }
+
+    function setupSound() {
+      loadSoundSettings();
+      document.getElementById('tracks').append(...SONGS.map(({ id, title }) => {
+        const label = document.createElement('label');
+        label.className = 'tile';
+        const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'song', value: id });
+        label.append(input, title);
+        return label;
+      }));
+      showSoundSettings();
+      const changed = () => { saveSoundSettings(); showSoundSettings(); };
+
+      soundMenu.addEventListener('toggle', ev => { if (ev.newState === 'open') { showSoundSettings(); placeSoundMenu(); } });
+      addEventListener('resize', () => { if (soundMenu.matches(':popover-open')) placeSoundMenu(); });
+
+      document.getElementById('music-toggle').addEventListener('click', () => { setMusic(!sound.music); changed(); });
+      document.getElementById('tracks').addEventListener('change', ev => {
+        changeSong(ev.target.value);
+        if (!sound.music) setMusic(true);                 // picking a song means "play it"
+        changed();
+      });
+      document.getElementById('music-volume').addEventListener('input', ev => {
+        sound.musicVolume = ev.target.value / 100;
+        if (audio && sound.music) glide(audio.music, sound.musicVolume * MUSIC_MAX, 0.1);
+        saveSoundSettings();
+      });
+      document.getElementById('cats-toggle').addEventListener('click', () => {
+        sound.cats = !sound.cats;
+        startAudio();
+        glide(audio.cats, sound.cats ? sound.catsVolume * CATS_MAX : 0, 0.2);
+        changed();
+      });
+      document.getElementById('cats-volume').addEventListener('input', ev => {
+        sound.catsVolume = ev.target.value / 100;
+        if (audio && sound.cats) glide(audio.cats, sound.catsVolume * CATS_MAX, 0.1);
+        saveSoundSettings();
+      });
+
+      // Browsers only allow sound after the visitor does something.
+      const unlock = () => startAudio();
+      addEventListener('pointerdown', unlock, { once: true, capture: true });
+      addEventListener('keydown', unlock, { once: true, capture: true });
+      // Quiet while the tab is hidden; carry on when it's back.
+      document.addEventListener('visibilitychange', () => {
+        if (!audio || !sound.music) return;
+        document.hidden ? pauseMusic() : playMusic();
+      });
+    }
+
+    // ------------------------------------------------------------------
     // Main
     // ------------------------------------------------------------------
     function start() {
       buildPalette();
       setupMenu();
+      setupSound();
       updateSky();
       setInterval(updateSky, 60_000);
       setRoom(DEFAULT_ROOM);
