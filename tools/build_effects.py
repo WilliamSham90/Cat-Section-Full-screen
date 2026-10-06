@@ -29,6 +29,7 @@ EFFECTS = {
     'pounce': 'toon_impact_001_small_yellow.gif',
     'music': 'round_music_burst_001_small_violet.gif',
     'party': 'directional_party_burst_001_small_red.gif',
+    'death': 'stylized_skull_smoke_burst_001_small_white.gif',
 }
 
 
