@@ -281,15 +281,17 @@
       right: 12px;
       bottom: calc(var(--yard-strip, 0px) + 12px);     /* just above the play area */
       z-index: 5;
-      gap: 6px;
+      gap: 8px;
       margin: 0;
-      padding: 0 6px;
-      align-items: baseline;
+      padding: 2px 16px 2px 10px;           /* script fonts lean right: leave them room */
+      align-items: center;
       font-size: 12px;
+      white-space: nowrap;
       pointer-events: none;                 /* never gets in the way of dragging */
     }
     .signature .name {
-      font: 20px/1 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive;
+      font: 20px/1.25 "Segoe Script", "Bradley Hand", "Snell Roundhand", "Brush Script MT", cursive;
+      letter-spacing: .02em;
     }
 
     @media (max-width: 600px) {
@@ -506,14 +508,16 @@
     // The sky behind the room. By default it follows the viewer's clock: each
     // picture shows from the local hour `from` until the next one starts.
     // The Sky button can also pin one of them, or a plain dark backdrop.
+    // `stars` is how starry it is (0 none, 1 full), for the twinkling stars.
     const SKIES = [
-      { name: 'Fajr', from: 4, src: 'backgrounds/fajrbackground.png' },          // before sunrise
-      { name: 'Dawn', from: 6, src: 'backgrounds/dawnbackground.png' },
-      { name: 'Noon', from: 9, src: 'backgrounds/noonbackground.png' },
-      { name: 'Sunset', from: 17, src: 'backgrounds/sunsetbackground.png' },
-      { name: 'Night', from: 20, src: 'backgrounds/nightbackgroundwithmoon.png' },
+      { name: 'Fajr', from: 4, src: 'backgrounds/fajrbackground.png', stars: 0 },          // before sunrise
+      { name: 'Dawn', from: 6, src: 'backgrounds/dawnbackground.png', stars: 0 },
+      { name: 'Noon', from: 9, src: 'backgrounds/noonbackground.png', stars: 0 },
+      { name: 'Sunset', from: 17, src: 'backgrounds/sunsetbackground.png', stars: 0.45 },
+      { name: 'Night', from: 20, src: 'backgrounds/nightbackgroundwithmoon.png', stars: 1 },
     ];
-    const DEFAULT_SKY = 'clock';
+    const DARK_SKY = { name: 'Dark', src: '', stars: 1 };
+    const DEFAULT_SKY = 0;                                 // Fajr
 
     // Pixel effects: strips of square frames in effects/, made from the GIFs
     // in "Pixel effects" by tools/build_effects.py. `at` is where they play on
@@ -529,10 +533,9 @@
                            '💢': 'scrap', '😋': 'music' };
 
     // What the room looks like at first. Positions are fractions of the
-    // floor's width (left → right) and depth (back → front); cats can be
-    // given a name.
+    // floor's width (left → right) and depth (back → front).
     const START = [
-      ['Cream cat', .5, .55, { name: 'Coco' }], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
+      ['Cream cat', .5, .55], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
       ['Blue ball', .42, .72], ['Green scratcher', .6, .3], ['Toy mouse', .3, .62],
       ['Fig in a brown pot', .44, .12], ['Cream table', .18, .58],
     ];
@@ -755,7 +758,9 @@
     const labels = new PIXI.Container();                 // cats' name tags
     const fx = new PIXI.Container();
     const talk = new PIXI.Container();                   // speech bubbles
-    app.stage.addChild(room, ground, shadows, world, labels, fx, talk);
+    const starLayer = new PIXI.Container();              // twinkling stars (see Stars)
+    const shooter = new PIXI.Graphics();                 // the shooting star
+    app.stage.addChild(starLayer, shooter, room, ground, shadows, world, labels, fx, talk);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
 
@@ -818,9 +823,9 @@
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).stroke({ color: 0x403939, alpha: 0.25, width: 2 });
       for (const e of entities) { fit(e); clamp(e); }
       placeTree();
+      makeStars();
     }
 
-    const yardCat = () => entities.find(e => e.kind === 'cat' && e.zone === 'yard');
     const playTree = () => entities.find(e => e.def === PLAY_TREE);
     function placeTree() {
       const tree = playTree();
@@ -947,7 +952,7 @@
       const up = held(e);
       e.sprite.position.set(e.x, e.y - e.lift - (up ? 12 : 0));
       e.sprite.scale.set(e.dir * e.s, e.s);
-      e.sprite.zIndex = up ? 1e9 : e.y + e.z;
+      e.sprite.zIndex = up ? 1e9 : e.fixed ? -1e9 : e.y + e.z;   // scenery is always at the back
       if (e.shadow) {
         e.shadow.position.set(e.x, e.y);
         e.shadow.visible = e.sprite.visible;
@@ -961,9 +966,14 @@
     // Cats get a name when they arrive; it shows on a tag under their feet.
     const CAT_NAMES = ['Mochi', 'Luna', 'Biscuit', 'Pumpkin', 'Tofu', 'Miso', 'Pepper', 'Nala', 'Oreo', 'Ginger',
       'Cleo', 'Milo', 'Willow', 'Peanut', 'Sushi', 'Bean', 'Toast', 'Maple', 'Pickle', 'Noodle', 'Waffle', 'Olive'];
+    // The first cats to arrive get these, in order (Coco starts in the room).
+    const FIRST_NAMES = ['Coco', 'Moose'];
+    let catsArrived = 0;
     function freshName() {
+      const first = FIRST_NAMES[catsArrived++];
+      if (first) return first;
       const taken = new Set(entities.filter(e => e.kind === 'cat').map(c => c.name));
-      return pick(CAT_NAMES.filter(n => !taken.has(n))) ?? pick(CAT_NAMES);
+      return pick(CAT_NAMES.filter(n => !taken.has(n) && !FIRST_NAMES.includes(n))) ?? pick(CAT_NAMES);
     }
     const TAG_STYLE = new PIXI.TextStyle({
       fontFamily: ['Pixelify Sans', 'system-ui', 'sans-serif'], fontSize: 14, fontWeight: '600',
@@ -1216,6 +1226,15 @@
         goTo(cat, friend.x, friend.y, () => greet(cat, friend), friend);
         return true;
       }
+      if (need === 'hunger') {                                   // a hungry cat goes after the mouse first
+        const prey = nearest(cat, entities.filter(e => e.kind === 'mouse' && e.zone === cat.zone && usable(e, cat)));
+        if (prey) {
+          settle(cat);
+          say(cat, pick(['Dinner!', 'Snack!', 'Mouse!']));
+          goTo(cat, prey.x, prey.y, () => pounce(cat, prey, true), prey, 1.25);
+          return true;
+        }
+      }
       const item = nearest(cat, entities.filter(e => e.zone === cat.zone && USES[e.kind]?.need === need && usable(e, cat)), 0.5);
       if (item) use(cat, item);
       else if (need === 'tired') nap(cat);                       // no bed free: curl up on the floor
@@ -1285,14 +1304,22 @@
       });
     }
 
-    function pounce(cat, mouse) {
+    // `hungry`: the cat was hunting for food, so it eats the mouse after.
+    function pounce(cat, mouse, hungry = false) {
       face(cat, mouse);
       if (held(mouse) || mouse.dying) return act(cat, 'jump', 1);
       effectAt('pounce', mouse.x, mouse.y - mouse.tall / 2);
       relieve(cat, 'bored', 0.6);
-      say(cat, pick(['Gotcha!', 'Mine!', 'Caught it!']));
       kill(mouse);
-      act(cat, 'attack', 0.8, () => act(cat, cat.def.anim.happy ? 'happy' : 'sit', 1.2));
+      if (!hungry) {
+        say(cat, pick(['Gotcha!', 'Mine!', 'Caught it!']));
+        return act(cat, 'attack', 0.8, () => act(cat, cat.def.anim.happy ? 'happy' : 'sit', 1.2));
+      }
+      act(cat, 'attack', 0.6, () => act(cat, 'sit', 1.6, () => {
+        relieve(cat, 'hunger', 0.7);
+        emote(cat, '😋');
+        say(cat, 'Yum!');
+      }));
     }
 
     // A caught mouse: it squeaks, goes still and fades as the death effect
@@ -1588,7 +1615,7 @@
       if (drag.e) {
         if (drag.e.fixed) return;
         const p = toWorld(ev.clientX, ev.clientY);
-        if (drag.e.kind === 'cat') drag.e.zone = zoneAt(p, drag.e);
+        if (drag.e.kind === 'cat') drag.e.zone = zoneAt(p);
         drag.e.x = p.x + drag.ox;
         drag.e.y = p.y + drag.oy;
         clamp(drag.e);
@@ -1598,12 +1625,8 @@
       }
     }
 
-    // Which area a cat dragged to world point p goes in: the play area if
-    // it's over the strip and no other cat is out there.
-    function zoneAt(p, cat = null) {
-      const other = yardCat();
-      return p.y >= yard.y0 - 24 && (!other || other === cat) ? 'yard' : 'room';
-    }
+    // Which area a cat dragged to world point p goes in.
+    const zoneAt = p => (p.y >= yard.y0 - 24 ? 'yard' : 'room');
 
     function endDrag(ev) {
       if (ev.pointerId !== drag.id) return;
@@ -1830,13 +1853,13 @@
     // ------------------------------------------------------------------
     // Sky
     // ------------------------------------------------------------------
-    let skyChoice = DEFAULT_SKY;                          // 'clock', 'dark' or an index into SKIES
+    let skyChoice = DEFAULT_SKY;                          // an index into SKIES, 'clock' or 'dark'
 
     const clockSky = (now = new Date()) => {
       const hour = now.getHours() + now.getMinutes() / 60;
       return SKIES.findLast(sky => hour >= sky.from) ?? SKIES.at(-1);   // before 4am: still night
     };
-    const skySrc = now => skyChoice === 'clock' ? clockSky(now).src : skyChoice === 'dark' ? '' : SKIES[skyChoice].src;
+    const currentSky = now => skyChoice === 'clock' ? clockSky(now) : skyChoice === 'dark' ? DARK_SKY : SKIES[skyChoice];
 
     function skyThumb(src) {
       const pic = document.createElement('span');
@@ -1847,11 +1870,83 @@
 
     // Show the chosen sky; with 'clock' this is re-run every minute.
     function updateSky(now = new Date()) {
-      const src = skySrc(now);
+      const { src, stars } = currentSky(now);
       if (sceneEl.dataset.sky === src) return;
       sceneEl.dataset.sky = src;
       sceneEl.style.backgroundImage = src ? `url("${src}")` : 'none';
       document.getElementById('sky-pic').replaceChildren(skyThumb(src));
+      setStars(stars);
+    }
+
+    // ------------------------------------------------------------------
+    // Stars – twinkling pixel stars and the odd shooting star, drawn behind
+    // the room on the starry skies. Held still for people who ask their
+    // system for reduced motion.
+    // ------------------------------------------------------------------
+    const STARS = {
+      perArea: 1 / 9000,          // stars per px² of sky, at full starriness
+      colours: [0xfffbe8, 0xfff1b8, 0xd8ecff],
+      shootEvery: [5, 12],        // seconds between shooting stars
+    };
+    // A 4-point sparkle and a single dot, in 2px pixels.
+    const SPARKLE = new PIXI.GraphicsContext()
+      .rect(-1, -1, 2, 2).rect(-1, -3, 2, 2).rect(-1, 1, 2, 2).rect(-3, -1, 2, 2).rect(1, -1, 2, 2).fill(0xffffff);
+    const DOT = new PIXI.GraphicsContext().rect(-1, -1, 2, 2).fill(0xffffff);
+    const stillSky = matchMedia('(prefers-reduced-motion: reduce)');
+    let starriness = 0;
+    let starClock = 0;
+    let nextShot = rand(...STARS.shootEvery);
+    let shot = null;                                      // the shooting star in flight
+
+    function setStars(amount) {
+      starriness = amount;
+      makeStars();
+    }
+
+    // Scatter stars over the sky; sunsets only get them high up.
+    function makeStars() {
+      for (const star of starLayer.removeChildren()) star.destroy();
+      if (!starriness) return;
+      const { width } = app.screen;
+      const height = yard.y0 - 24;                        // the sky ends at the play area
+      const top = starriness < 1 ? 0.5 : 1;               // share of the sky they reach down to
+      const count = Math.round(width * height * top * STARS.perArea * starriness);
+      for (let i = 0; i < count; i++) {
+        const big = Math.random() < 0.3;
+        const star = new PIXI.Graphics(big ? SPARKLE : DOT);
+        star.position.set(Math.round(rand(0, width)), Math.round(rand(0, height * top)));
+        star.scale.set(big && Math.random() < 0.4 ? 2 : 1);
+        star.tint = pick(STARS.colours);
+        Object.assign(star, { phase: rand(0, Math.PI * 2), speed: rand(1.2, 3.2), dim: rand(0.15, 0.45) });
+        starLayer.addChild(star);
+      }
+    }
+
+    function updateStars(dt) {
+      starClock += dt;
+      const still = stillSky.matches;
+      for (const star of starLayer.children) {
+        star.alpha = still ? 0.8 : star.dim + (1 - star.dim) * (0.5 + 0.5 * Math.sin(starClock * star.speed + star.phase));
+      }
+      shooter.clear();
+      if (!starriness || still) return;
+      if (!shot && (nextShot -= dt) <= 0) {
+        const { width, height } = app.screen;
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        shot = { x: rand(width * 0.2, width * 0.8), y: rand(0, height * 0.25), vx: dir * rand(500, 750), vy: rand(180, 280), age: 0, life: rand(0.6, 0.9) };
+        nextShot = rand(...STARS.shootEvery);
+      }
+      if (!shot) return;
+      shot.age += dt;
+      shot.x += shot.vx * dt;
+      shot.y += shot.vy * dt;
+      const fade = 1 - shot.age / shot.life;
+      if (fade <= 0) { shot = null; return; }
+      // A head and a tail of 2px squares getting fainter.
+      for (let i = 0; i < 12; i++) {
+        shooter.rect(Math.round(shot.x - shot.vx * i * 0.012), Math.round(shot.y - shot.vy * i * 0.012), 2, 2)
+          .fill({ color: 0xfffbe8, alpha: fade * (1 - i / 12) });
+      }
     }
 
     function setSky(choice) {
@@ -1870,9 +1965,9 @@
 
     function populate() {
       const f = floorBox();
-      for (const [name, fx, fy, extra] of START) {
-        const e = spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
-        if (extra?.name) rename(e, extra.name);
+      catsArrived = 0;
+      for (const [name, fx, fy] of START) {
+        spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
       }
       spawn(PLAY_TREE, yard.x0, yard.y1, { zone: 'yard', fixed: true });
       placeTree();
@@ -2011,6 +2106,7 @@
         for (const e of entities) draw(e);
         updateEmotes(dt);
         updateBubbles(dt);
+        updateStars(dt);
         updateMenu(dt);
       });
     }
