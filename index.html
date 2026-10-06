@@ -5,18 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cat Playground</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐱</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap">
   <style>
+    /* Colours and frames come from the cat UI sheet (CatUserInterface/CatUI.png);
+       tools/build_ui.py cuts the pieces used here into ui/. Every piece is
+       drawn at exactly 2× so its pixels stay crisp. */
     :root {
-      color-scheme: dark;
-      --bg: #1b1b24;
-      --bar: #23232f;
-      --edge: #363649;
-      --slot: #2d2d3d;
-      --slot-hover: #3b3b52;
-      --text: #f2f2f7;
-      --muted: #9a9ab0;
-      --focus: #8ab4ff;
-      --danger: #e5484d;
+      color-scheme: light;
+      --ink: #403939;                       /* outlines and text */
+      --cream: #f6e8d6;
+      --sand: #d2c4b2;
+      --tan: #bea187;
+      --cocoa: #6e564a;
+      --cocoa-dark: #4f3d35;
+      --muted: #7d6b60;
+      --focus: #ff8a3d;                     /* shows on both cream and cocoa */
+      --danger: #c8553d;
+      --bg: #2a2230;                        /* behind the room when the sky is "Dark" */
+      --font: "Pixelify Sans", system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -26,26 +34,93 @@
       grid-template-columns: minmax(0, 1fr);
       height: 100dvh;
       background: var(--bg);
-      color: var(--text);
-      font: 14px/1.4 system-ui, sans-serif;
+      color: var(--ink);
+      font: 14px/1.3 var(--font);
+    }
+    button { font: inherit; color: inherit; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    img, canvas { image-rendering: pixelated; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
 
-    /* ---- Control bar: everything you can add, plus the trash ---- */
+    /* ---- Pixel frames ---- */
+    /* Rounded cream square, stretched to any size. */
+    .tile {
+      border: 8px solid transparent;
+      border-image: url("ui/tile.png") 4 fill / 8px;
+      background: none;
+      image-rendering: pixelated;
+      cursor: pointer;
+    }
+    .tile:hover { filter: brightness(1.04); }
+    .tile:active { border-image-source: url("ui/tile-down.png"); }
+    .tile[aria-expanded="true"], .tile[aria-current="true"], .tile[aria-pressed="true"] {
+      border-image-source: url("ui/tile-sand.png");
+    }
+    /* Long button with a darker bottom edge. */
+    .btn {
+      min-width: 92px;
+      padding: 0 12px;
+      border-style: solid;
+      border-color: transparent;
+      border-width: 6px 6px 10px;
+      border-image: url("ui/button.png") 3 3 5 fill / 6px 6px 10px;
+      background: none;
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 15px;
+      line-height: 20px;
+      image-rendering: pixelated;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.07); }
+    .btn:active { transform: translateY(2px); }
+    .btn.dark { border-image-source: url("ui/button-dark.png"); color: var(--cream); }
+    /* Cream panel with cat ears; content sits below the ears. */
+    .panel {
+      border-style: solid;
+      border-color: transparent;
+      border-width: 46px 14px 16px;
+      border-image: url("ui/panel.png") 26 25 12 fill / 52px 50px 24px;
+      background: none;
+      color: var(--ink);
+      image-rendering: pixelated;
+    }
+    /* Cat head on the left, a bar for text on the right. */
+    .nameplate {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      border-style: solid;
+      border-color: transparent;
+      border-width: 6px 8px 6px 46px;
+      border-image: url("ui/nameplate.png") 3 4 3 23 fill / 6px 8px 6px 46px;
+      image-rendering: pixelated;
+    }
+
+    /* ---- Control bar: everything you can add, plus the tools ---- */
     .bar {
       display: flex;
       gap: 12px;
       padding: 8px 12px;
-      background: var(--bar);
-      border-bottom: 1px solid var(--edge);
+      background: var(--cocoa);
+      border-bottom: 4px solid var(--cocoa-dark);
     }
     .palette {
       flex: 1;
-      min-width: 0;                   /* let it scroll instead of widening the page */
+      min-width: 0;                         /* let it scroll instead of widening the page */
       display: flex;
       align-items: center;
       gap: 8px;
       overflow-x: auto;
       scrollbar-width: thin;
+      scrollbar-color: var(--tan) transparent;
       padding-bottom: 2px;
     }
     .group, .group > div { display: flex; gap: 6px; }
@@ -58,20 +133,13 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 0 10px 0 8px;
-      background: var(--slot);
-      border: 2px solid transparent;
-      border-radius: 10px;
-      color: var(--text);
-      font: 600 12px/1 system-ui, sans-serif;
+      padding: 0 2px;
+      font-weight: 600;
+      font-size: 14px;
       white-space: nowrap;
-      cursor: pointer;
     }
-    .toggle:hover { background: var(--slot-hover); }
-    .toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .toggle[aria-expanded="true"] { border-color: var(--focus); }
-    .toggle canvas { image-rendering: pixelated; pointer-events: none; }
-    .toggle .sign { width: 12px; font-size: 18px; color: var(--muted); text-align: center; }
+    .toggle canvas { pointer-events: none; }
+    .toggle .sign { width: 28px; height: 28px; }
     .item {
       flex: none;
       width: 52px;
@@ -79,17 +147,12 @@
       display: grid;
       place-items: center;
       padding: 0;
-      background: var(--slot);
-      border: 0;
-      border-radius: 10px;
       cursor: grab;
-      touch-action: pan-x;            /* swipe sideways scrolls the bar, drag down places the item */
+      touch-action: pan-x;                  /* swipe sideways scrolls the bar, drag down places the item */
       user-select: none;
       -webkit-touch-callout: none;
     }
-    .item:hover { background: var(--slot-hover); }
-    .item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .item canvas, .ghost, .pic canvas { image-rendering: pixelated; pointer-events: none; }
+    .item canvas, .ghost, .pic canvas { pointer-events: none; }
 
     .tools { flex: none; display: flex; gap: 8px; }
     .tool, .trash {
@@ -99,29 +162,22 @@
       place-content: center;
       justify-items: center;
       gap: 2px;
-      border: 2px dashed var(--edge);
-      border-radius: 12px;
-      color: var(--muted);
-      font-size: 11px;
-      transition: background-color .15s, border-color .15s, color .15s, transform .15s;
+      font-size: 12px;
+      font-weight: 600;
     }
-    .tool {
-      padding: 4px;
-      background: var(--slot);
-      border-style: solid;
-      color: var(--text);
-      font-family: inherit;
-      cursor: pointer;
-    }
-    .tool:hover { background: var(--slot-hover); }
-    .tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .tool { padding: 0; }
     .tool canvas, .tool .sky-thumb { display: block; width: 32px; height: 28px; }
     .dragging .tool { pointer-events: none; }
-    .dragging .trash { border-color: var(--muted); }
+    .trash {
+      border: 2px dashed var(--sand);
+      border-radius: 10px;
+      color: var(--cream);
+      transition: background-color .15s, border-color .15s, transform .15s;
+    }
+    .dragging .trash { border-color: var(--cream); }
     .trash.armed {
-      background: color-mix(in srgb, var(--danger) 18%, transparent);
-      border-color: var(--danger);
-      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 45%, transparent);
+      border-color: var(--cream);
       transform: scale(1.06);
     }
 
@@ -138,79 +194,98 @@
     .ghost { position: fixed; left: 0; top: 0; z-index: 10; opacity: .85; }
     .dragging, .dragging * { cursor: grabbing !important; user-select: none; }
 
-    /* ---- Delete confirmation ---- */
+    /* ---- Dialogs ---- */
     dialog {
-      width: min(320px, calc(100vw - 32px));
-      padding: 20px;
-      border: 1px solid var(--edge);
-      border-radius: 14px;
-      background: var(--bar);
-      color: var(--text);
+      width: min(340px, calc(100vw - 24px));
+      padding: 4px 10px 6px;
       text-align: center;
+      overflow: visible;
     }
-    dialog::backdrop { background: rgb(0 0 0 / .55); }
-    dialog p { margin: 8px 0 18px; font-size: 16px; }
+    dialog::backdrop { background: rgb(40 28 28 / .5); }
+    dialog p { margin: 4px 0 16px; font-size: 17px; }
     .pic { display: grid; place-items: center; min-height: 64px; }
     .pic:empty { display: none; }
-    .actions { display: flex; justify-content: center; gap: 8px; }
-    .actions button {
-      font: inherit;
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid var(--edge);
-      background: var(--slot);
-      color: var(--text);
-      cursor: pointer;
-    }
-    .actions button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 
     /* ---- Room and sky pickers ---- */
-    .picker { width: min(560px, calc(100vw - 32px)); }
-    .picker h2 { margin: 0 0 14px; font-size: 16px; }
+    .picker { width: min(580px, calc(100vw - 24px)); }
+    .picker h2 { margin: 0 0 12px; font-size: 20px; }
     .room-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-      gap: 8px;
-      margin-bottom: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 6px;
+      margin-bottom: 14px;
     }
     .room-grid button {
       display: grid;
       justify-items: center;
-      gap: 4px;
-      padding: 8px 4px 6px;
-      border: 2px solid transparent;
-      border-radius: 10px;
-      background: var(--slot);
-      color: var(--muted);
-      font: 12px/1.2 system-ui, sans-serif;
-      cursor: pointer;
+      gap: 2px;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1.1;
     }
-    .room-grid button:hover { background: var(--slot-hover); color: var(--text); }
-    .room-grid button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .room-grid button[aria-current="true"] { border-color: var(--focus); color: var(--text); }
     .room-grid canvas, .room-grid .sky-thumb { width: 64px; height: 56px; }
     .sky-thumb {
-      border-radius: 6px;
+      border-radius: 4px;
       background: var(--bg) center / cover no-repeat;
       image-rendering: pixelated;
     }
 
-    /* ---- Signature ---- */
+    /* ---- Cat menu (a popover next to the cat) ---- */
+    .cat-menu {
+      position: fixed;
+      inset: auto;
+      margin: 0;
+      width: 252px;
+      padding: 0 6px 4px;
+      overflow: visible;
+    }
+    .cat-menu label { display: block; }
+    .cat-menu .nameplate { width: 100%; margin-bottom: 8px; }
+    .cat-menu input {
+      width: 100%;
+      min-width: 0;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font: 600 17px/24px var(--font);
+    }
+    .cat-menu input:focus-visible { outline: none; }
+    .cat-menu .nameplate:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .needs { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 0 2px 10px; font-size: 13px; }
+    .meter {
+      align-self: center;
+      height: 12px;
+      border: 2px solid var(--ink);
+      border-radius: 3px;
+      background: var(--sand);
+      overflow: hidden;
+    }
+    .meter > span { display: block; height: 100%; background: var(--fill, var(--tan)); transition: width .3s; }
+    .cat-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .cat-actions button {
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 2px;
+      height: 62px;
+      padding: 0;
+      font-size: 13px;
+    }
+    .cat-actions img { height: 26px; width: auto; }
+
+    /* ---- Signature, on a cat name plate ---- */
     .signature {
       position: fixed;
       right: 12px;
       bottom: max(10px, env(safe-area-inset-bottom));
       z-index: 5;
-      display: flex;
-      align-items: baseline;
       gap: 6px;
       margin: 0;
-      padding: 4px 12px 6px;
-      border-radius: 999px;
-      background: rgb(27 27 36 / .6);
-      color: var(--text);
-      font-size: 11px;
+      padding: 0 6px;
+      align-items: baseline;
+      font-size: 12px;
       pointer-events: none;                 /* never gets in the way of dragging */
     }
     .signature .name {
@@ -218,12 +293,15 @@
     }
 
     @media (max-width: 600px) {
-      .bar { gap: 8px; padding: 6px 8px; }
-      .toggle { height: 44px; padding: 0 6px; }
+      .bar { gap: 6px; padding: 6px 8px; }
+      .toggle { height: 44px; }
       .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
       .tools { gap: 4px; }
-      .tool, .trash { width: 50px; }
+      .tool, .trash { width: 48px; font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #scene, .trash { transition: none; }
     }
   </style>
 </head>
@@ -231,15 +309,15 @@
   <header class="bar" aria-label="Add cats and objects: open a group, then drag an item into the room or click it">
     <nav class="palette" id="palette" aria-label="Items"></nav>
     <div class="tools">
-      <button type="button" class="tool" id="room-button" title="Choose a room" aria-haspopup="dialog">
+      <button type="button" class="tool tile" id="room-button" title="Choose a room" aria-haspopup="dialog">
         <span id="room-pic" aria-hidden="true"></span>
         Room
       </button>
-      <button type="button" class="tool" id="sky-button" title="Choose the sky behind the room" aria-haspopup="dialog">
+      <button type="button" class="tool tile" id="sky-button" title="Choose the sky behind the room" aria-haspopup="dialog">
         <span id="sky-pic" aria-hidden="true"></span>
         Sky
       </button>
-      <button type="button" class="tool" id="reset" title="Put the room back the way it started">
+      <button type="button" class="tool tile" id="reset" title="Put the room back the way it started">
         <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
@@ -256,32 +334,42 @@
     </div>
   </header>
   <main id="scene"></main>
-  <footer class="signature"><span>Made by</span> <span class="name">William Sham</span></footer>
+  <footer class="signature nameplate"><span>Made by</span> <span class="name">William Sham</span></footer>
 
-  <dialog id="confirm" aria-labelledby="confirm-text">
+  <!-- Opens next to a cat when it's clicked. -->
+  <div id="cat-menu" class="cat-menu panel" popover aria-label="Cat">
+    <label class="nameplate">
+      <span class="visually-hidden">Name</span>
+      <input id="cat-name" maxlength="16" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="needs" id="cat-needs"></div>
+    <div class="cat-actions" id="cat-actions"></div>
+  </div>
+
+  <dialog id="confirm" class="panel" aria-labelledby="confirm-text">
     <form method="dialog">
       <div class="pic" id="confirm-pic"></div>
       <p id="confirm-text"></p>
       <div class="actions">
-        <button value="cancel" id="confirm-no" autofocus></button>
-        <button value="ok" id="confirm-yes" class="danger"></button>
+        <button value="cancel" id="confirm-no" class="btn" autofocus></button>
+        <button value="ok" id="confirm-yes" class="btn dark"></button>
       </div>
     </form>
   </dialog>
 
-  <dialog id="rooms" class="picker" aria-labelledby="rooms-title">
+  <dialog id="rooms" class="picker panel" aria-labelledby="rooms-title">
     <form method="dialog">
       <h2 id="rooms-title">Choose a room</h2>
       <div class="room-grid" id="room-grid"></div>
-      <div class="actions"><button value="">Close</button></div>
+      <div class="actions"><button value="" class="btn">Close</button></div>
     </form>
   </dialog>
 
-  <dialog id="skies" class="picker" aria-labelledby="skies-title">
+  <dialog id="skies" class="picker panel" aria-labelledby="skies-title">
     <form method="dialog">
       <h2 id="skies-title">Choose the sky</h2>
       <div class="room-grid" id="sky-grid"></div>
-      <div class="actions"><button value="">Close</button></div>
+      <div class="actions"><button value="" class="btn">Close</button></div>
     </form>
   </dialog>
 
@@ -628,7 +716,9 @@
       const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
       const fxUrl = name => `effects/${name}.png`;
       const urls = [...new Set([...CATALOG.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl)])];
-      const tex = await PIXI.Assets.load(urls);
+      // The name tags are drawn in the page's pixel font, so wait for it (but not forever, or if offline).
+      const font = Promise.race([document.fonts.load('600 14px "Pixelify Sans"'), new Promise(r => setTimeout(r, 3000))]).catch(() => {});
+      const [tex] = await Promise.all([PIXI.Assets.load(urls), font]);
       for (const url of urls) art[url] = tex[url].source.resource;
       for (const [name, effect] of Object.entries(EFFECTS)) {
         const t = tex[fxUrl(name)];
@@ -656,8 +746,9 @@
     const room = new PIXI.Sprite();
     const shadows = new PIXI.Container();
     const world = new PIXI.Container({ sortableChildren: true });
+    const labels = new PIXI.Container();                 // cats' name tags
     const fx = new PIXI.Container();
-    app.stage.addChild(room, shadows, world, fx);
+    app.stage.addChild(room, shadows, world, labels, fx);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
 
@@ -703,8 +794,10 @@
     }
     const toFloor = (f, x, y) => { const u = (x - f.x) / f.rx, v = (y - f.y) / f.ry; return [u + v, u - v]; };
     const fromFloor = (f, p, q) => [f.x + ((p + q) / 2) * f.rx, f.y + ((p - q) / 2) * f.ry];
-    // How far in from the edges (in p, q units) something must stand to fit on the floor.
-    const margin = e => Math.min(0.9, e.half / (ROOM.floor.rx * view.k));
+    // How far in from the edges (in p, q units) something's feet must stay.
+    // Only a quarter of its half-width: things can stand right up against a
+    // wall or the front edge, with a little overhang, like real furniture.
+    const margin = e => Math.min(0.3, (e.half * 0.25) / (ROOM.floor.rx * view.k));
 
     // Pull (x, y) onto the floor, `m` in from its edges. hp / hq say which
     // edges it was pushed back from: −1 or +1, 0 for neither.
@@ -740,11 +833,14 @@
     const INIT = {
       cat: c => {
         c.needs = { hunger: rand(.2, .5), tired: rand(0, .3), bored: rand(.4, .7), lonely: rand(0, .3) };
-        c.speed = rand(220, 290);
+        c.speed = rand(...CAT_SPEED);
+        c.name = freshName();
+        c.tag = new PIXI.Text({ text: c.name, style: TAG_STYLE, anchor: { x: 0.5, y: 0 } });
+        labels.addChild(c.tag);
         act(c, 'idle', rand(1, 2));
       },
       bowl: b => setFood(b, 3),
-      mouse: m => { m.sprite.animationSpeed = 0.25; m.time = 0; m.stun = 0; },
+      mouse: m => { m.sprite.animationSpeed = 0.25; m.time = 0; m.stun = 0; m.heading = rand(0, Math.PI * 2); },
       wand: w => { w.sprite.animationSpeed = 0.2; w.wiggle = 0; },
       ball: b => { b.hop = 0; },
     };
@@ -756,8 +852,15 @@
       if (e.kind === 'cat') settle(e);
       else if (e.user) think(e.user);            // whoever was using it finds something else to do
       emote(e, '💨');
+      if (e === menuCat) catMenu.hidePopover();
+      unlink(e);
+    }
+
+    // Free an entity's display objects.
+    function unlink(e) {
       e.sprite.destroy();
       e.shadow?.destroy();
+      e.tag?.destroy();
     }
 
     // Size and on-screen extents; re-run when the room is resized.
@@ -786,7 +889,23 @@
         e.shadow.position.set(e.x, e.y);
         e.shadow.visible = e.sprite.visible;
       }
+      if (e.tag) {
+        e.tag.position.set(e.x, e.y + 2);
+        e.tag.visible = e.sprite.visible && !up;
+      }
     }
+
+    // Cats get a name when they arrive; it shows on a tag under their feet.
+    const CAT_NAMES = ['Mochi', 'Luna', 'Biscuit', 'Pumpkin', 'Tofu', 'Miso', 'Pepper', 'Nala', 'Oreo', 'Ginger',
+      'Cleo', 'Milo', 'Willow', 'Peanut', 'Sushi', 'Bean', 'Toast', 'Maple', 'Pickle', 'Noodle', 'Waffle', 'Olive'];
+    function freshName() {
+      const taken = new Set(entities.filter(e => e.kind === 'cat').map(c => c.name));
+      return pick(CAT_NAMES.filter(n => !taken.has(n))) ?? pick(CAT_NAMES);
+    }
+    const TAG_STYLE = new PIXI.TextStyle({
+      fontFamily: ['Pixelify Sans', 'system-ui', 'sans-serif'], fontSize: 14, fontWeight: '600',
+      fill: '#f6e8d6', stroke: { color: '#403939', width: 4, join: 'round' },
+    });
 
     // Play a pixel effect once at (x, y), then throw it away.
     function effectAt(name, x, y) {
@@ -845,7 +964,14 @@
     // the nearest suitable object (or another cat), otherwise it wanders and
     // lounges. A cat is always either acting (an animation for a while) or
     // moving (to a spot, or chasing something), then runs `next`.
-    const NEED_RATE = { hunger: 1 / 100, tired: 1 / 140, bored: 1 / 40, lonely: 1 / 70 };
+    const NEED_RATE = { hunger: 1 / 100, tired: 1 / 140, bored: 1 / 30, lonely: 1 / 60 };
+    const URGENT = 0.5;                                  // a need above this gets seen to first
+
+    // Movement, in px (at 2× room zoom) and seconds.
+    const CAT_SPEED = [290, 360];                        // each cat's own top speed is picked from this
+    const ACCEL = 1400;                                  // how hard cats speed up and brake
+    const TURN = 9;                                      // how quickly they swing round to a new heading
+    const LEAP = 130;                                    // a chasing cat leaps at the mouse from this close
     const relieve = (cat, need, amount) => { cat.needs[need] = Math.max(0, cat.needs[need] - amount); };
 
     // How cats use each kind of object. solo = one cat at a time,
@@ -883,15 +1009,16 @@
     }
 
     function act(cat, anim, time, next = null, tick = null) {
-      Object.assign(cat, { mode: 'act', time, next, tick });
+      Object.assign(cat, { mode: 'act', time, next, tick, vx: 0, vy: 0 });
       play(cat, anim);
     }
 
-    // Run to (x, y), or after `follow` if given, then do `next`.
-    function goTo(cat, x, y, next = null, follow = null) {
+    // Run to (x, y), or after `follow` if given, then do `next`. `rush`
+    // scales the cat's speed (zoomies, chasing).
+    function goTo(cat, x, y, next = null, follow = null, rush = 1) {
       const to = onFloor(x, y, margin(cat));
-      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, tx: to.x, ty: to.y });
-      play(cat, 'run');
+      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y });
+      if (cat.anim !== 'run') play(cat, 'run');
     }
 
     // Let go of whatever the cat was doing.
@@ -908,19 +1035,55 @@
 
     function think(cat) {
       settle(cat);
-      const urgent = Object.keys(cat.needs).filter(k => cat.needs[k] > 0.55)
+      const urgent = Object.keys(cat.needs).filter(k => cat.needs[k] > URGENT)
         .sort((a, b) => cat.needs[b] - cat.needs[a]);
       for (const need of urgent) if (pursue(cat, need)) return;
-
-      if (Math.random() < 0.5) {
-        const to = randomSpot(margin(cat));
-        goTo(cat, to.x, to.y, () => act(cat, 'idle', rand(1, 3)));
-      } else {
-        act(cat, pick(['idle', 'sit', 'sit']), rand(2, 5));
-      }
+      pickWeighted(PASTIMES, cat)(cat);
     }
 
-    function pursue(cat, need) {
+    // What a content cat does next, with how likely each is.
+    const PASTIMES = [
+      [5, cat => { const to = randomSpot(margin(cat)); goTo(cat, to.x, to.y, () => act(cat, pick(['idle', 'sit']), rand(0.6, 1.8))); }],
+      [3, cat => act(cat, pick(['idle', 'sit', 'sit']), rand(1.2, 3))],
+      [2, sniff],
+      [cat => 1 + cat.needs.bored * 3, zoomies],
+      [cat => entities.some(c => c !== cat && free(c)) ? 1.5 : 0, tag],
+      [1, cat => act(cat, cat.def.anim.happy && Math.random() < 0.5 ? 'happy' : 'jump', 0.9)],
+    ];
+    function pickWeighted(list, cat) {
+      const weights = list.map(([w]) => (typeof w === 'function' ? w(cat) : w));
+      let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < list.length; i++) if ((r -= weights[i]) < 0) return list[i][1];
+      return list[0][1];
+    }
+
+    // Wander over to something in the room and give it a sniff.
+    function sniff(cat) {
+      const thing = pick(entities.filter(e => e !== cat && !held(e) && e.sprite.visible));
+      if (!thing) return act(cat, 'sit', 1.5);
+      goTo(cat, besideX(cat, thing), thing.y + 1, () => { face(cat, thing); act(cat, 'sit', rand(0.8, 1.6)); });
+    }
+
+    // A burst of racing round the room.
+    function zoomies(cat) {
+      let laps = 2 + Math.floor(Math.random() * 3);
+      const lap = () => {
+        if (laps-- <= 0) return act(cat, 'sit', rand(1, 2));
+        const to = randomSpot(margin(cat));
+        goTo(cat, to.x, to.y, lap, null, 1.7);
+      };
+      relieve(cat, 'bored', 0.25);
+      lap();
+    }
+
+    // Run at another cat; when caught, they play-fight or cuddle (greet).
+    function tag(cat) {
+      const friend = pick(entities.filter(c => c !== cat && free(c)));
+      if (!friend) return act(cat, 'sit', 1);
+      goTo(cat, friend.x, friend.y, () => greet(cat, friend), friend, 1.3);
+    }
+
+    function pursue(cat, need, insist = false) {
       if (need === 'lonely') {
         const friend = nearest(cat, entities.filter(c => c !== cat && free(c)));
         if (!friend) return false;
@@ -930,7 +1093,7 @@
       const item = nearest(cat, entities.filter(e => USES[e.kind]?.need === need && usable(e, cat)), 0.5);
       if (item) use(cat, item);
       else if (need === 'tired') nap(cat);                       // no bed free: curl up on the floor
-      else if (need === 'hunger' && Math.random() < 0.5) {      // no food: beg by an empty bowl
+      else if (need === 'hunger' && (insist || Math.random() < 0.5)) {   // no food: beg by an empty bowl
         const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && !held(e)));
         if (!bowl) return false;
         goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); emote(cat, '🍽️'); act(cat, 'sit', 3); });
@@ -942,7 +1105,7 @@
       settle(cat);
       const how = USES[item.kind];
       if (how.solo) { item.user = cat; cat.using = item; }
-      if (how.chase) return goTo(cat, item.x, item.y, () => how.use(cat, item), item);
+      if (how.chase) return goTo(cat, item.x, item.y, () => how.use(cat, item), item, 1.25);
       const x = how.spot ? how.spot(cat, item) : besideX(cat, item);
       goTo(cat, x, item.y + 1, () => { face(cat, item); how.use(cat, item); });
     }
@@ -1042,24 +1205,54 @@
         if (cat.time > 0) return;
       } else if (cat.mode === 'move') {
         const t = cat.follow;
-        if (t?.dead || cat.time <= 0) return think(cat);       // target gone, or gave up
-        const tx = t ? t.x : cat.tx, ty = t ? t.y : cat.ty;
-        const dx = tx - cat.x, dy = ty - cat.y, dist = Math.hypot(dx, dy);
-        const reach = t ? t.half + cat.half * 0.6 : 0;
-        const step = cat.speed * unit() * dt;
-        if (dist - reach > step) {
-          cat.x += (dx / dist) * step;
-          cat.y += (dy / dist) * step;
-          if (Math.abs(dx) > 1) cat.dir = Math.sign(dx);
-          return;
-        }
-        if (!t) { cat.x = tx; cat.y = ty; }
+        if (t?.dead || (t && held(t)) || cat.time <= 0) return think(cat);   // target gone, or gave up
+        if (moveCat(cat, t ? t.x : cat.tx, t ? t.y : cat.ty, t ? t.half + cat.half * 0.6 : 0, dt)) return;
+        if (!t) { cat.x = cat.tx; cat.y = cat.ty; }
       }
       // Done: run the follow-up, or work out what to do next.
       const next = cat.next;
       cat.mode = cat.next = cat.tick = null;
       next?.();
       if (!cat.mode) think(cat);
+    }
+
+    // One step towards (tx, ty), stopping `reach` short. The cat speeds up,
+    // turns and brakes smoothly rather than snapping to full speed. Returns
+    // false once it has arrived.
+    function moveCat(cat, tx, ty, reach, dt) {
+      const u = unit();
+      const dx = tx - cat.x, dy = ty - cat.y, dist = Math.hypot(dx, dy);
+      const left = dist - reach;
+      if (left <= 3 * u) { cat.vx = cat.vy = 0; return false; }
+
+      if (cat.follow?.kind === 'mouse') {
+        if (!cat.leaping && left < LEAP * u) {                                // pounce from a distance
+          Object.assign(cat, { leaping: true, rush: 2.6 });
+          play(cat, 'jump');
+        } else if (cat.leaping && left > LEAP * 2 * u) {                      // missed: back to running
+          Object.assign(cat, { leaping: false, rush: 1.25 });
+          play(cat, 'run');
+        }
+      }
+      const top = cat.speed * cat.rush * u;
+      const want = Math.min(top, Math.sqrt(2 * ACCEL * u * left));            // brake in time to stop
+      const k = Math.min(1, TURN * dt);
+      cat.vx += ((dx / dist) * want - cat.vx) * k;
+      cat.vy += ((dy / dist) * want - cat.vy) * k;
+      const step = Math.hypot(cat.vx, cat.vy) * dt;
+      if (step >= left) {
+        cat.x += (dx / dist) * left;
+        cat.y += (dy / dist) * left;
+        cat.vx = cat.vy = 0;
+        return false;
+      }
+      cat.x += cat.vx * dt;
+      cat.y += cat.vy * dt;
+      if (Math.abs(cat.vx) > 8 * u) cat.dir = Math.sign(cat.vx);
+      if (cat.anim === 'run') {                                               // legs keep pace with the floor
+        cat.sprite.animationSpeed = ANIM_SPEED.run * clampTo(Math.hypot(cat.vx, cat.vy) / (300 * u), 0.5, 1.8);
+      }
+      return true;
     }
 
     // ------------------------------------------------------------------
@@ -1087,6 +1280,7 @@
       const f = Math.exp(-friction * dt);
       e.vx *= f;
       e.vy *= f;
+      return { hp, hq };
     }
 
     function updateBall(b, dt) {
@@ -1096,6 +1290,11 @@
       b.lift = Math.abs(Math.sin(b.hop)) * Math.min(speed / 12, 24 * unit());
     }
 
+    // The mouse darts about in short dashes with pauses in between. When a
+    // cat comes close it bolts, zig-zagging away and steering clear of
+    // corners it could be trapped in.
+    const MOUSE = { dash: 200, flee: 310, scare: 210 };
+
     function updateMouse(m, dt) {
       const u = unit();
       if (m.stun > 0) {
@@ -1103,22 +1302,54 @@
         slide(m, dt, 4);
       } else {
         const cat = nearest(m, entities.filter(c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep'));
-        const d = cat ? Math.max(1, Math.hypot(m.x - cat.x, m.y - cat.y)) : Infinity;
-        if (d < 170 * u) {                                     // run away from the cat
-          m.vx = ((m.x - cat.x) / d) * 210 * u;
-          m.vy = ((m.y - cat.y) / d) * 210 * u;
-          m.time = 0.5;
-        } else if ((m.time -= dt) <= 0) {                      // potter about, sometimes pause
-          m.time = rand(1, 3);
-          const a = rand(0, Math.PI * 2), v = Math.random() < 0.4 ? 0 : 70 * u;
-          m.vx = Math.cos(a) * v;
-          m.vy = Math.sin(a) * v * 0.6;
+        const d = cat ? Math.hypot(m.x - cat.x, m.y - cat.y) : Infinity;
+        m.time -= dt;
+        let speed = 0;
+        if (d < MOUSE.scare * u) {
+          if (!m.fleeing || m.time <= 0) {                     // new zig every fraction of a second
+            if (!m.fleeing) emote(m, '❗');
+            m.fleeing = true;
+            m.time = rand(0.15, 0.35);
+            m.heading = escapeHeading(m, cat);
+          }
+          speed = MOUSE.flee;
+        } else {
+          m.fleeing = false;
+          if (m.time <= 0) {
+            m.dashing = !m.dashing;
+            m.time = m.dashing ? rand(0.3, 0.9) : rand(0.25, 1.2);
+            if (m.dashing) m.heading = (m.heading ?? rand(0, Math.PI * 2)) + rand(-1.3, 1.3);
+          }
+          if (m.dashing) speed = MOUSE.dash;
         }
-        slide(m, dt, 0);
+        const k = Math.min(1, 14 * dt);                        // quick to start and stop
+        m.vx += (Math.cos(m.heading ?? 0) * speed * u - m.vx) * k;
+        m.vy += (Math.sin(m.heading ?? 0) * speed * 0.6 * u - m.vy) * k;
+        const { hp, hq } = slide(m, dt, 0);
+        if (hp || hq) m.heading = Math.atan2(m.vy / 0.6, m.vx);   // carry on the way it bounced
       }
-      const moving = Math.hypot(m.vx, m.vy) > 5;
-      if (moving !== m.sprite.playing) moving ? m.sprite.play() : m.sprite.stop();
+      const speed = Math.hypot(m.vx, m.vy);
+      if (speed > 5) {
+        if (!m.sprite.playing) m.sprite.play();
+        m.sprite.animationSpeed = 0.25 * clampTo(speed / (200 * u), 0.6, 1.8);
+      } else if (m.sprite.playing) m.sprite.stop();
       if (Math.abs(m.vx) > 5) m.dir = Math.sign(m.vx);
+    }
+
+    // Away from the cat, but not into a wall: try headings around "straight
+    // away" and keep the one with the most open floor ahead.
+    function escapeHeading(m, cat) {
+      const f = floorBox(), u = unit();
+      const away = Math.atan2((m.y - cat.y) / 0.6, m.x - cat.x);
+      let best = away, bestScore = -Infinity;
+      for (let i = -4; i <= 4; i++) {
+        const a = away + i * 0.4 + rand(-0.15, 0.15);
+        const [p, q] = toFloor(f, m.x + Math.cos(a) * 110 * u, m.y + Math.sin(a) * 0.6 * 110 * u);
+        const out = Math.max(Math.abs(p), Math.abs(q));
+        const score = Math.cos(a - away) - Math.max(0, out - 0.8) * 8;
+        if (score > bestScore) { best = a; bestScore = score; }
+      }
+      return best;
     }
 
     function updateWand(w, dt) {
@@ -1186,6 +1417,7 @@
       const p = toWorld(drag.sx, drag.sy);
       Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y, homeX: e.x, homeY: e.y });
       if (e.kind === 'cat') {
+        if (e === menuCat) catMenu.hidePopover();
         settle(e);
         e.mode = null;
         play(e, 'jump');
@@ -1227,7 +1459,7 @@
       const cancelled = ev.type === 'pointercancel';
 
       if (!moved) {
-        if (e && !cancelled) e.kind === 'cat' ? pet(e) : clickItem(e);
+        if (e && !cancelled) e.kind === 'cat' ? openMenu(e) : clickItem(e);
         return;
       }
       if (def) {                                            // new thing from the bar
@@ -1243,6 +1475,118 @@
         e.y = homeY;
         confirmDelete(e);
       }
+    }
+
+    // ------------------------------------------------------------------
+    // Cat menu – click a cat to name it, see how it's doing and tell it
+    // what to do. While it's open the cat sits and waits.
+    // ------------------------------------------------------------------
+    const catMenu = document.getElementById('cat-menu');
+    const nameInput = document.getElementById('cat-name');
+    let menuCat = null;
+    let menuClock = 0;
+
+    // Shown as "how good", so a full bar is a happy cat.
+    const NEED_BARS = [
+      { need: 'hunger', label: 'Full', colour: '#e9a46a' },
+      { need: 'tired', label: 'Energy', colour: '#8fb8d8' },
+      { need: 'bored', label: 'Fun', colour: '#e8c66a' },
+      { need: 'lonely', label: 'Love', colour: '#e89a9a' },
+    ];
+    const uiIcon = src => Object.assign(document.createElement('img'), { src, alt: '' });
+    const frameIcon = (cat, anim) => thumb({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, fitScale({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, 28));
+    const MENU_ACTIONS = [
+      { label: 'Pet', icon: () => uiIcon('ui/paw.png'), run: pet },
+      { label: 'Feed', icon: () => uiIcon('ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (emote(cat, '🍽️'), act(cat, 'sit', 2)) },
+      { label: 'Play', icon: () => thumb(CATALOG.find(d => d.name === 'Blue ball'), 2), run: cat => pursue(cat, 'bored') || zoomies(cat) },
+      { label: 'Nap', icon: () => uiIcon('ui/sleeping-cat.png'), run: cat => pursue(cat, 'tired') },
+      { label: 'Sit', icon: cat => frameIcon(cat, 'sit'), run: cat => act(cat, 'sit', rand(4, 6)) },
+      { label: 'Zoomies', icon: cat => frameIcon(cat, 'run'), run: zoomies },
+    ];
+
+    function buildNeeds() {
+      document.getElementById('cat-needs').replaceChildren(...NEED_BARS.flatMap(({ label, colour }) => {
+        const name = Object.assign(document.createElement('span'), { textContent: label });
+        const bar = document.createElement('span');
+        bar.className = 'meter';
+        bar.setAttribute('role', 'meter');
+        bar.setAttribute('aria-label', label);
+        bar.setAttribute('aria-valuemin', '0');
+        bar.setAttribute('aria-valuemax', '100');
+        bar.style.setProperty('--fill', colour);
+        bar.appendChild(document.createElement('span'));
+        return [name, bar];
+      }));
+    }
+
+    function showNeeds(cat) {
+      const bars = document.querySelectorAll('#cat-needs .meter');
+      NEED_BARS.forEach(({ need }, i) => {
+        const value = Math.round((1 - cat.needs[need]) * 100);
+        bars[i].setAttribute('aria-valuenow', String(value));
+        bars[i].firstChild.style.width = `${value}%`;
+      });
+    }
+
+    function openMenu(cat) {
+      menuCat = cat;
+      settle(cat);
+      act(cat, 'sit', Infinity);
+      cat.waiting = true;
+      nameInput.value = cat.name;
+      catMenu.setAttribute('aria-label', cat.name);
+      document.getElementById('cat-actions').replaceChildren(...MENU_ACTIONS.map(({ label, icon, run }) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tile';
+        b.append(icon(cat), label);
+        b.addEventListener('click', () => {
+          cat.waiting = false;
+          catMenu.hidePopover();
+          if (!cat.dead) { settle(cat); run(cat); }
+        });
+        return b;
+      }));
+      showNeeds(cat);
+      catMenu.showPopover();
+      placeMenu();
+      catMenu.querySelector('.cat-actions button').focus({ preventScroll: true });
+    }
+
+    // Beside the cat, flipped to the other side or nudged in if it would
+    // run off the screen.
+    function placeMenu() {
+      const cat = menuCat, box = app.canvas.getBoundingClientRect();
+      const w = catMenu.offsetWidth, h = catMenu.offsetHeight;
+      let left = box.left + cat.x + cat.half + 12;
+      if (left + w > innerWidth - 8) left = box.left + cat.x - cat.half - 12 - w;
+      const top = box.top + cat.y - cat.tall / 2 - h / 2;
+      catMenu.style.left = `${clampTo(left, 8, Math.max(8, innerWidth - w - 8))}px`;
+      catMenu.style.top = `${clampTo(top, 8, Math.max(8, innerHeight - h - 8))}px`;
+    }
+
+    function updateMenu(dt) {
+      if (!menuCat) return;
+      placeMenu();
+      if ((menuClock -= dt) <= 0) { menuClock = 0.25; showNeeds(menuCat); }
+    }
+
+    function setupMenu() {
+      buildNeeds();
+      nameInput.addEventListener('input', () => {
+        const name = nameInput.value.trim();
+        if (!menuCat || !name) return;
+        menuCat.name = menuCat.tag.text = name;
+        catMenu.setAttribute('aria-label', name);
+      });
+      nameInput.addEventListener('keydown', ev => { if (ev.key === 'Enter') catMenu.hidePopover(); });
+      // Closing without picking an action (Esc, clicking elsewhere): the cat carries on.
+      catMenu.addEventListener('toggle', ev => {
+        if (ev.newState !== 'closed' || !menuCat) return;
+        const cat = menuCat;
+        menuCat = null;
+        if (cat.waiting && !cat.dead) { cat.waiting = false; think(cat); }
+      });
     }
 
     // ------------------------------------------------------------------
@@ -1300,6 +1644,7 @@
       if (!grid.children.length) {
         for (const { value, label, pic } of options()) {
           const b = document.createElement('button');
+          b.className = 'tile';
           b.value = value;                                  // closes the dialog with this value
           b.append(pic, label);
           grid.appendChild(b);
@@ -1367,10 +1712,10 @@
     // Back to the starting room: default room type, starting cats and things.
     function reset() {
       if (drag) endDrag({ pointerId: drag.id, type: 'pointercancel' });
+      if (menuCat) catMenu.hidePopover();
       for (const e of entities) {
         e.dead = true;
-        e.sprite.destroy();
-        e.shadow?.destroy();
+        unlink(e);
       }
       entities.length = 0;
       for (const child of fx.removeChildren()) child.destroy();   // pop-ups and effects
@@ -1385,16 +1730,17 @@
     // ------------------------------------------------------------------
     // Control bar
     // ------------------------------------------------------------------
+    const SIGN = { closed: 'ui/icon-plus.png', open: 'ui/icon-minus.png' };
+
     // A button that opens and closes a group of items.
     function makeToggle(name, label, def) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'toggle';
+      button.className = 'toggle tile';
       button.setAttribute('aria-label', name);
       if (def) button.appendChild(thumb(def, fitScale(def, 28)));
       const text = Object.assign(document.createElement('span'), { className: 'label', textContent: label });
-      const sign = Object.assign(document.createElement('span'), { className: 'sign', textContent: '+' });
-      sign.setAttribute('aria-hidden', 'true');
+      const sign = Object.assign(document.createElement('img'), { className: 'sign', src: SIGN.closed, alt: '' });
       button.append(text, sign);
       return button;
     }
@@ -1407,13 +1753,13 @@
       const setOpen = (g, open) => {
         g.row.hidden = !open;
         g.toggle.setAttribute('aria-expanded', String(open));
-        g.toggle.querySelector('.sign').textContent = open ? '−' : '+';
+        g.toggle.querySelector('.sign').src = open ? SIGN.open : SIGN.closed;
       };
       const allButton = makeToggle('All items', 'All', null);
       const syncAll = () => {
         const open = groups.every(g => !g.row.hidden);
         allButton.setAttribute('aria-expanded', String(open));
-        allButton.querySelector('.sign').textContent = open ? '−' : '+';
+        allButton.querySelector('.sign').src = open ? SIGN.open : SIGN.closed;
       };
       paletteEl.appendChild(allButton);
 
@@ -1441,7 +1787,7 @@
         for (const def of defs) {
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'item';
+          button.className = 'item tile';
           button.title = `${def.name} – drag into the scene, or click to add`;
           button.setAttribute('aria-label', `Add ${def.name}`);
           button.appendChild(thumb(def, fitScale(def, 40)));
@@ -1477,6 +1823,7 @@
     // ------------------------------------------------------------------
     function start() {
       buildPalette();
+      setupMenu();
       updateSky();
       setInterval(updateSky, 60_000);
       setRoom(DEFAULT_ROOM);
@@ -1494,6 +1841,7 @@
         for (const e of [...entities]) if (!e.dead && !held(e)) UPDATE[e.kind]?.(e, dt);
         for (const e of entities) draw(e);
         updateEmotes(dt);
+        updateMenu(dt);
       });
     }
 
