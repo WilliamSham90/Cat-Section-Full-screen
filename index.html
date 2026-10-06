@@ -279,7 +279,7 @@
     .signature {
       position: fixed;
       right: 12px;
-      bottom: max(10px, env(safe-area-inset-bottom));
+      bottom: calc(var(--yard-strip, 0px) + 12px);     /* just above the play area */
       z-index: 5;
       gap: 6px;
       margin: 0;
@@ -435,8 +435,6 @@
       ...cells('Hideaways', 'Beds/CatBoxes.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
         'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3 }),
       ...cells('Furniture', 'CatToys/toyss.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
-      ...cells('Furniture', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 3 }),
-      ...cells('Furniture', 'PlayGrounds/CatPlayGroundLighter.png', 1, 128, ['Light cat tree'], { kind: 'tree', scale: 3 }),
       ...decor('Furniture', { kind: 'post' }, [
         ['Peach scratching post', [191, 17, 64, 110]], ['Olive scratching post', [287, 16, 64, 110]],
         ['Slate scratching post', [383, 16, 64, 110]],
@@ -458,7 +456,11 @@
     ];
     const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS];
 
-    // Platform tops on the cat tree sheet, in sheet pixels [x, y].
+    // Fixed scenery, not in the bar: the cat tree that makes the play area.
+    // PlayGrounds/CatPlayGroundLighter.png is a paler version that also fits.
+    const PLAY_TREE = cells('Play area', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2 })[0];
+
+    // Platform tops on the cat tree picture, in its pixels [x, y].
     const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
 
     // ------------------------------------------------------------------
@@ -519,7 +521,7 @@
     const EFFECTS = {
       hearts: { at: 'head' }, sparkle: { at: 'body' }, sleep: { at: 'head' }, smoke: { at: 'body' },
       alert: { at: 'head' }, scrap: { at: 'body' }, pounce: { at: 'body' }, music: { at: 'head' },
-      party: { at: 'body' },
+      party: { at: 'body' }, death: { at: 'body' },
     };
     const FX_SPEED = 0.25;                              // ≈ 15 fps, the speed the GIFs were made for
     // Pop-ups shown as a pixel effect; any other emoji floats up as text.
@@ -527,9 +529,10 @@
                            '💢': 'scrap', '😋': 'music' };
 
     // What the room looks like at first. Positions are fractions of the
-    // floor's width (left → right) and depth (back → front).
+    // floor's width (left → right) and depth (back → front); cats can be
+    // given a name.
     const START = [
-      ['Cream cat', .5, .55], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
+      ['Cream cat', .5, .55, { name: 'Coco' }], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
       ['Blue ball', .42, .72], ['Green scratcher', .6, .3], ['Toy mouse', .3, .62],
       ['Fig in a brown pot', .44, .12], ['Cream table', .18, .58],
     ];
@@ -713,18 +716,20 @@
     const art = {};                                     // url → loaded image, for drawing on canvases
 
     async function loadArt() {
+      const defs = [...CATALOG, PLAY_TREE];
       const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
       const fxUrl = name => `effects/${name}.png`;
-      const urls = [...new Set([...CATALOG.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl)])];
+      const urls = [...new Set([...defs.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl), 'ui/bubble.png'])];
       // The name tags are drawn in the page's pixel font, so wait for it (but not forever, or if offline).
       const font = Promise.race([document.fonts.load('600 14px "Pixelify Sans"'), new Promise(r => setTimeout(r, 3000))]).catch(() => {});
       const [tex] = await Promise.all([PIXI.Assets.load(urls), font]);
       for (const url of urls) art[url] = tex[url].source.resource;
+      bubbleTexture = tex['ui/bubble.png'];
       for (const [name, effect] of Object.entries(EFFECTS)) {
         const t = tex[fxUrl(name)];
         effect.textures = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height)).textures;
       }
-      for (const d of CATALOG) {
+      for (const d of defs) {
         if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
         d.anim = {};
         for (const [name, file] of Object.entries(d.files)) {
@@ -744,11 +749,13 @@
     // in front.
     const entities = [];
     const room = new PIXI.Sprite();
+    const ground = new PIXI.Graphics();                  // the play area's strip
     const shadows = new PIXI.Container();
     const world = new PIXI.Container({ sortableChildren: true });
     const labels = new PIXI.Container();                 // cats' name tags
     const fx = new PIXI.Container();
-    app.stage.addChild(room, shadows, world, labels, fx);
+    const talk = new PIXI.Container();                   // speech bubbles
+    app.stage.addChild(room, ground, shadows, world, labels, fx, talk);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
 
@@ -758,19 +765,43 @@
     const unit = () => view.k / ROOM.base;
     const sizeOf = def => Math.max(1, Math.round(def.scale * unit()));
 
+    // The play area: a strip of ground along the bottom of the screen where
+    // cats' feet can go, with the cat tree at its left end.
+    const yard = { x0: 0, x1: 1, y0: 0, y1: 1 };
+    const YARD_STRIP = { share: 0.15, min: 64, max: 120 };     // strip height: share of the scene, within px limits
+
     function layout() {
       const { width, height } = app.screen;
       const [cx, cy, cw, ch] = ROOM.crop;
-      const best = Math.min(width / cw, height / ch) * 0.96;
-      // A whole-number zoom keeps the pixel art crisp; only give that up when it would shrink the room a lot.
-      const k = Math.floor(best) >= 1 && Math.floor(best) / best > 0.85 ? Math.floor(best) : best;
+      const strip = clampTo(height * YARD_STRIP.share, YARD_STRIP.min, YARD_STRIP.max);
+      const zoomFor = h => {
+        const best = Math.min(width / cw, h / ch) * 0.96;
+        // A whole-number zoom keeps the pixel art crisp; only give that up when it would shrink the room a lot.
+        return Math.floor(best) >= 1 && Math.floor(best) / best > 0.85 ? Math.floor(best) : best;
+      };
+      // The room sits above the strip. If the cat tree wouldn't fit beside
+      // it, the room also clears the tree's height.
+      let above = height - strip;
+      let k = zoomFor(above);
+      const treeScale = Math.max(1, Math.round(PLAY_TREE.scale * k / ROOM.base));
+      const [, , tw, th] = PLAY_TREE.look.crop;
+      if ((width - cw * k) / 2 < tw * treeScale + 16) {
+        above = height - Math.max(strip, th * treeScale + 8);
+        k = zoomFor(above);
+      }
       const x = Math.round((width - cw * k) / 2 - cx * k);
-      const y = Math.round((height - ch * k) / 2 - cy * k);
+      const y = Math.round((above - ch * k) / 2 - cy * k);
+      const next = { x0: 8, x1: width - 8, y0: height - strip + 14, y1: height - 6 };
 
-      // Carry everything over, so it keeps its place in the room.
+      // Carry everything over, so it keeps its place in the room or the play area.
       const r = k / view.k;
-      const move = (px, py) => [x + (px - view.x) * r, y + (py - view.y) * r];
+      const inRoom = (px, py) => [x + (px - view.x) * r, y + (py - view.y) * r];
+      const inYard = (px, py) => [
+        next.x0 + ((px - yard.x0) / (yard.x1 - yard.x0 || 1)) * (next.x1 - next.x0),
+        next.y0 + ((py - yard.y0) / (yard.y1 - yard.y0 || 1)) * (next.y1 - next.y0),
+      ];
       for (const e of entities) {
+        const move = e.zone === 'yard' ? inYard : inRoom;
         [e.x, e.y] = move(e.x, e.y);
         if (e.tx !== undefined) [e.tx, e.ty] = move(e.tx, e.ty);
         e.vx *= r;
@@ -778,9 +809,37 @@
         e.lift *= r;
       }
       Object.assign(view, { k, x, y });
+      Object.assign(yard, next);
+      document.documentElement.style.setProperty('--yard-strip', `${height - yard.y0 + 18}px`);
       room.position.set(x, y);
       room.scale.set(k);
+      ground.clear()
+        .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).fill({ color: 0xf6e8d6, alpha: 0.35 })
+        .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).stroke({ color: 0x403939, alpha: 0.25, width: 2 });
       for (const e of entities) { fit(e); clamp(e); }
+      placeTree();
+    }
+
+    const yardCat = () => entities.find(e => e.kind === 'cat' && e.zone === 'yard');
+    const playTree = () => entities.find(e => e.def === PLAY_TREE);
+    function placeTree() {
+      const tree = playTree();
+      if (tree) Object.assign(tree, { x: yard.x0 + tree.half + 8, y: yard.y1 });
+    }
+
+    // Where (x, y) lands for entity e in its area (or `zone`): on the room's
+    // floor, or within the play area's strip. Also says which floor edges it
+    // was pushed back from (see onFloor).
+    function stand(e, x, y, zone = e.zone) {
+      if (zone !== 'yard') return onFloor(x, y, margin(e));
+      const pad = e.half * 0.5;
+      return { x: clampTo(x, yard.x0 + pad, yard.x1 - pad), y: clampTo(y, yard.y0, yard.y1), hp: 0, hq: 0 };
+    }
+    // Somewhere random for e to go in its area.
+    function spotFor(e) {
+      if (e.zone !== 'yard') return randomSpot(margin(e));
+      const pad = e.half * 0.5;
+      return { x: rand(yard.x0 + pad, yard.x1 - pad), y: rand(yard.y0, yard.y1) };
     }
 
     // The floor is a diamond. In the coordinates p = u + v, q = u − v (where
@@ -813,12 +872,13 @@
       return { x, y };
     }
 
-    function spawn(def, x, y) {
+    // `fixed` scenery can't be picked up or thrown away.
+    function spawn(def, x, y, { zone = 'room', fixed = false } = {}) {
       const sprite = new PIXI.AnimatedSprite(def.look.textures);
       sprite.anchor.copyFrom(def.look.anchor);
       sprite.eventMode = 'static';
-      sprite.cursor = 'grab';
-      const e = { def, kind: def.kind, sprite, x, y, lift: 0, z: 0, vx: 0, vy: 0,
+      sprite.cursor = fixed ? 'pointer' : 'grab';
+      const e = { def, kind: def.kind, sprite, x, y, zone, fixed, lift: 0, z: 0, vx: 0, vy: 0,
                   dir: def.kind === 'cat' && Math.random() < 0.5 ? -1 : 1 };
       sprite.on('pointerdown', ev => startDrag({ e }, ev));
       world.addChild(sprite);
@@ -835,6 +895,7 @@
         c.needs = { hunger: rand(.2, .5), tired: rand(0, .3), bored: rand(.4, .7), lonely: rand(0, .3) };
         c.speed = rand(...CAT_SPEED);
         c.name = freshName();
+        c.chat = rand(1, 8);
         c.tag = new PIXI.Text({ text: c.name, style: TAG_STYLE, anchor: { x: 0.5, y: 0 } });
         labels.addChild(c.tag);
         act(c, 'idle', rand(1, 2));
@@ -845,13 +906,14 @@
       ball: b => { b.hop = 0; },
     };
 
-    function remove(e) {
+    // `quiet`: no puff of smoke (it already had its own send-off).
+    function remove(e, quiet = false) {
       if (e.dead) return;
       e.dead = true;
       entities.splice(entities.indexOf(e), 1);
       if (e.kind === 'cat') settle(e);
       else if (e.user) think(e.user);            // whoever was using it finds something else to do
-      emote(e, '💨');
+      if (!quiet) emote(e, '💨');
       if (e === menuCat) catMenu.hidePopover();
       unlink(e);
     }
@@ -861,6 +923,7 @@
       e.sprite.destroy();
       e.shadow?.destroy();
       e.tag?.destroy();
+      e.bubble?.view.destroy({ children: true });
     }
 
     // Size and on-screen extents; re-run when the room is resized.
@@ -872,9 +935,9 @@
       e.shadow?.scale.set(e.half * 0.8);
     }
 
-    // Keep an entity on the floor; returns which edges it hit (see onFloor).
+    // Keep an entity within its area; returns which edges it hit (see onFloor).
     function clamp(e) {
-      const at = onFloor(e.x, e.y, margin(e));
+      const at = stand(e, e.x, e.y);
       e.x = at.x;
       e.y = at.y;
       return at;
@@ -906,6 +969,69 @@
       fontFamily: ['Pixelify Sans', 'system-ui', 'sans-serif'], fontSize: 14, fontWeight: '600',
       fill: '#f6e8d6', stroke: { color: '#403939', width: 4, join: 'round' },
     });
+
+    function rename(cat, name) {
+      cat.name = cat.tag.text = name;
+    }
+
+    // Speech bubbles: a stretched bubble from the UI sheet with a line of
+    // text, floating above the speaker's head with the tail pointing at it.
+    // One at a time per speaker; it follows them and fades out.
+    const BUBBLE = { slices: { leftWidth: 3, topHeight: 3, rightWidth: 10, bottomHeight: 6 }, tail: 6, scale: 2, time: 2.4 };
+    const BUBBLE_STYLE = new PIXI.TextStyle({
+      fontFamily: ['Pixelify Sans', 'system-ui', 'sans-serif'], fontSize: 15, fontWeight: '600', fill: '#403939',
+    });
+    // What cats say, by mood; `chat` when nothing in particular is up.
+    const LINES = {
+      chat: ['Meow', 'Mew', 'Mrrp', 'Purr~', 'Nya~', 'Mrow?', 'Prrt!'],
+      hunger: ['Feed me!', 'Hungry…', 'Meooow!'],
+      tired: ['*yawn*', 'Sleepy…'],
+      bored: ['Play?', 'Bored…', 'Mrrp?'],
+      lonely: ['Mew?', 'Anyone?'],
+    };
+    let bubbleTexture = null;
+
+    function say(e, text, time = BUBBLE.time) {
+      e.bubble?.view.destroy({ children: true });
+      const view = new PIXI.Container();
+      const label = new PIXI.Text({ text, style: BUBBLE_STYLE });
+      const k = BUBBLE.scale;
+      const frame = new PIXI.NineSliceSprite({
+        texture: bubbleTexture, ...BUBBLE.slices,
+        width: Math.ceil((label.width + 18) / k), height: Math.ceil((label.height + 8) / k) + BUBBLE.tail,
+      });
+      frame.scale.set(k);
+      label.position.set(9, 4);
+      view.addChild(frame, label);
+      // The tail's tip, near the bubble's bottom right, sits just above the head.
+      view.pivot.set(frame.width * k - 6 * k, frame.height * k);
+      talk.addChild(view);
+      e.bubble = { view, age: 0, time };
+    }
+
+    function updateBubbles(dt) {
+      for (const e of entities) {
+        const b = e.bubble;
+        if (!b) continue;
+        b.age += dt;
+        if (b.age >= b.time || !e.sprite.visible) {
+          b.view.destroy({ children: true });
+          e.bubble = null;
+          continue;
+        }
+        b.view.position.set(Math.round(e.x + e.half * 0.4), Math.round(e.y - e.lift - e.tall * 0.85));
+        b.view.alpha = Math.min(1, (b.time - b.age) / 0.3);
+      }
+    }
+
+    // Now and then an awake cat says something about how it's feeling.
+    function chatter(cat, dt) {
+      if ((cat.chat -= dt) > 0) return;
+      cat.chat = rand(7, 16);
+      if (cat.anim === 'sleep' || !cat.sprite.visible || held(cat) || cat === menuCat) return;
+      const need = Object.keys(cat.needs).filter(k => cat.needs[k] > URGENT).sort((a, b) => cat.needs[b] - cat.needs[a])[0];
+      say(cat, pick(LINES[need] ?? LINES.chat));
+    }
 
     // Play a pixel effect once at (x, y), then throw it away.
     function effectAt(name, x, y) {
@@ -994,7 +1120,7 @@
 
     function usable(item, cat) {
       const how = USES[item.kind];
-      return !!how && !held(item) && !(how.solo && item.user && item.user !== cat) && (how.ok?.(item) ?? true);
+      return !!how && !held(item) && !item.dying && !(how.solo && item.user && item.user !== cat) && (how.ok?.(item) ?? true);
     }
     // Awake, on the floor and not tied up with an object.
     const free = c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep' && !c.using;
@@ -1016,7 +1142,7 @@
     // Run to (x, y), or after `follow` if given, then do `next`. `rush`
     // scales the cat's speed (zoomies, chasing).
     function goTo(cat, x, y, next = null, follow = null, rush = 1) {
-      const to = onFloor(x, y, margin(cat));
+      const to = stand(cat, x, y);
       Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y });
       if (cat.anim !== 'run') play(cat, 'run');
     }
@@ -1043,11 +1169,11 @@
 
     // What a content cat does next, with how likely each is.
     const PASTIMES = [
-      [5, cat => { const to = randomSpot(margin(cat)); goTo(cat, to.x, to.y, () => act(cat, pick(['idle', 'sit']), rand(0.6, 1.8))); }],
+      [5, cat => { const to = spotFor(cat); goTo(cat, to.x, to.y, () => act(cat, pick(['idle', 'sit']), rand(0.6, 1.8))); }],
       [3, cat => act(cat, pick(['idle', 'sit', 'sit']), rand(1.2, 3))],
       [2, sniff],
       [cat => 1 + cat.needs.bored * 3, zoomies],
-      [cat => entities.some(c => c !== cat && free(c)) ? 1.5 : 0, tag],
+      [cat => entities.some(c => c !== cat && free(c) && c.zone === cat.zone) ? 1.5 : 0, tag],
       [1, cat => act(cat, cat.def.anim.happy && Math.random() < 0.5 ? 'happy' : 'jump', 0.9)],
     ];
     function pickWeighted(list, cat) {
@@ -1059,7 +1185,7 @@
 
     // Wander over to something in the room and give it a sniff.
     function sniff(cat) {
-      const thing = pick(entities.filter(e => e !== cat && !held(e) && e.sprite.visible));
+      const thing = pick(entities.filter(e => e !== cat && e.zone === cat.zone && !held(e) && e.sprite.visible));
       if (!thing) return act(cat, 'sit', 1.5);
       goTo(cat, besideX(cat, thing), thing.y + 1, () => { face(cat, thing); act(cat, 'sit', rand(0.8, 1.6)); });
     }
@@ -1069,7 +1195,7 @@
       let laps = 2 + Math.floor(Math.random() * 3);
       const lap = () => {
         if (laps-- <= 0) return act(cat, 'sit', rand(1, 2));
-        const to = randomSpot(margin(cat));
+        const to = spotFor(cat);
         goTo(cat, to.x, to.y, lap, null, 1.7);
       };
       relieve(cat, 'bored', 0.25);
@@ -1078,25 +1204,25 @@
 
     // Run at another cat; when caught, they play-fight or cuddle (greet).
     function tag(cat) {
-      const friend = pick(entities.filter(c => c !== cat && free(c)));
+      const friend = pick(entities.filter(c => c !== cat && free(c) && c.zone === cat.zone));
       if (!friend) return act(cat, 'sit', 1);
       goTo(cat, friend.x, friend.y, () => greet(cat, friend), friend, 1.3);
     }
 
     function pursue(cat, need, insist = false) {
       if (need === 'lonely') {
-        const friend = nearest(cat, entities.filter(c => c !== cat && free(c)));
+        const friend = nearest(cat, entities.filter(c => c !== cat && free(c) && c.zone === cat.zone));
         if (!friend) return false;
         goTo(cat, friend.x, friend.y, () => greet(cat, friend), friend);
         return true;
       }
-      const item = nearest(cat, entities.filter(e => USES[e.kind]?.need === need && usable(e, cat)), 0.5);
+      const item = nearest(cat, entities.filter(e => e.zone === cat.zone && USES[e.kind]?.need === need && usable(e, cat)), 0.5);
       if (item) use(cat, item);
       else if (need === 'tired') nap(cat);                       // no bed free: curl up on the floor
       else if (need === 'hunger' && (insist || Math.random() < 0.5)) {   // no food: beg by an empty bowl
-        const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && !held(e)));
+        const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && e.zone === cat.zone && !held(e)));
         if (!bowl) return false;
-        goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); emote(cat, '🍽️'); act(cat, 'sit', 3); });
+        goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); say(cat, 'Feed me!'); act(cat, 'sit', 3); });
       } else return false;
       return true;
     }
@@ -1161,12 +1287,24 @@
 
     function pounce(cat, mouse) {
       face(cat, mouse);
-      if (held(mouse)) return act(cat, 'jump', 1);
+      if (held(mouse) || mouse.dying) return act(cat, 'jump', 1);
       effectAt('pounce', mouse.x, mouse.y - mouse.tall / 2);
-      relieve(cat, 'bored', 0.4);
-      mouse.stun = 1.2;
-      fling(mouse, 450);
-      act(cat, 'attack', 0.8);
+      relieve(cat, 'bored', 0.6);
+      say(cat, pick(['Gotcha!', 'Mine!', 'Caught it!']));
+      kill(mouse);
+      act(cat, 'attack', 0.8, () => act(cat, cat.def.anim.happy ? 'happy' : 'sit', 1.2));
+    }
+
+    // A caught mouse: it squeaks, goes still and fades as the death effect
+    // plays, then it's gone.
+    const MOUSE_DEATH = 0.9;                             // seconds to fade
+    function kill(m) {
+      m.dying = MOUSE_DEATH;
+      m.vx = m.vy = 0;
+      m.sprite.stop();
+      m.sprite.tint = 0x9a9aa8;
+      say(m, 'Eek!', MOUSE_DEATH);
+      effectAt('death', m.x, m.y - m.tall / 2);
     }
 
     function greet(cat, friend) {
@@ -1179,6 +1317,7 @@
         relieve(c, 'lonely', 0.7);
         if (scrap) relieve(c, 'bored', 0.3);
         emote(c, scrap ? '💢' : '❤️');
+        if (c === cat) say(c, scrap ? 'Hiss!' : 'Mrrp!');
         act(c, scrap ? 'attack' : 'sit', scrap ? 2 : 4);
       }
     }
@@ -1188,9 +1327,11 @@
       settle(cat);
       if (asleep) {
         emote(cat, '❗');
+        say(cat, 'Hmph!');
         return act(cat, 'jump', 0.8);
       }
       emote(cat, '❤️');
+      say(cat, 'Purr~');
       relieve(cat, 'lonely', 0.5);
       relieve(cat, 'bored', 0.2);
       act(cat, cat.def.anim.happy ? 'happy' : 'jump', 1.5);
@@ -1198,6 +1339,7 @@
 
     function updateCat(cat, dt) {
       for (const k in NEED_RATE) cat.needs[k] = Math.min(1, cat.needs[k] + NEED_RATE[k] * dt);
+      chatter(cat, dt);
       cat.time -= dt;
 
       if (cat.mode === 'act') {
@@ -1296,12 +1438,18 @@
     const MOUSE = { dash: 200, flee: 310, scare: 210 };
 
     function updateMouse(m, dt) {
+      if (m.dying !== undefined) {
+        m.dying -= dt;
+        m.sprite.alpha = Math.max(0, m.dying / MOUSE_DEATH);
+        if (m.dying <= 0) remove(m, true);
+        return;
+      }
       const u = unit();
       if (m.stun > 0) {
         m.stun -= dt;
         slide(m, dt, 4);
       } else {
-        const cat = nearest(m, entities.filter(c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep'));
+        const cat = nearest(m, entities.filter(c => c.kind === 'cat' && c.zone === m.zone && !held(c) && c.sprite.visible && c.anim !== 'sleep'));
         const d = cat ? Math.hypot(m.x - cat.x, m.y - cat.y) : Infinity;
         m.time -= dt;
         let speed = 0;
@@ -1367,7 +1515,7 @@
       bowl: b => { setFood(b, 3); emote(b, '✨'); },                            // refill
       bag: () => entities.filter(e => e.kind === 'bowl').forEach(CLICK.bowl),  // refill every bowl
       ball: b => fling(b, 550),
-      mouse: m => { fling(m, 260); m.time = 1; emote(m, '❗'); },
+      mouse: m => { if (m.dying) return; fling(m, 260); m.time = 1; emote(m, '❗'); say(m, 'Squeak!'); },
       wand: w => { w.wiggle = 2; },
     };
 
@@ -1375,7 +1523,7 @@
       if (item.kind === 'hideout' && item.user && !item.user.sprite.visible) return pet(item.user);   // knock knock
       CLICK[item.kind]?.(item);
       // …and the nearest cat that isn't busy comes over to check it out.
-      const cat = usable(item) && nearest(item, entities.filter(free));
+      const cat = usable(item) && nearest(item, entities.filter(c => free(c) && c.zone === item.zone));
       if (cat) use(cat, item);
     }
 
@@ -1386,7 +1534,7 @@
     // ------------------------------------------------------------------
     let drag = null;
     let dragMoved = false;          // lets a bar button ignore the click that ends a drag
-    const held = e => !!drag?.moved && drag.e === e;
+    const held = e => !!drag?.moved && drag.e === e && !e.fixed;
     const tmp = new PIXI.Point();
     const toWorld = (clientX, clientY) => {
       app.renderer.events.mapPositionToPoint(tmp, clientX, clientY);
@@ -1395,6 +1543,7 @@
 
     function startDrag(target, ev) {
       if (drag || ev.button !== 0) return;
+      if (target.e?.dying) return;
       drag = { ...target, id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, moved: false };
       dragMoved = false;
       addEventListener('pointermove', onDragMove);
@@ -1414,8 +1563,9 @@
         document.body.appendChild(drag.ghost);
         return;
       }
+      if (e.fixed) return;                                  // scenery stays put
       const p = toWorld(drag.sx, drag.sy);
-      Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y, homeX: e.x, homeY: e.y });
+      Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y, homeX: e.x, homeY: e.y, homeZone: e.zone });
       if (e.kind === 'cat') {
         if (e === menuCat) catMenu.hidePopover();
         settle(e);
@@ -1436,7 +1586,9 @@
         pickUp();
       }
       if (drag.e) {
+        if (drag.e.fixed) return;
         const p = toWorld(ev.clientX, ev.clientY);
+        if (drag.e.kind === 'cat') drag.e.zone = zoneAt(p, drag.e);
         drag.e.x = p.x + drag.ox;
         drag.e.y = p.y + drag.oy;
         clamp(drag.e);
@@ -1446,6 +1598,13 @@
       }
     }
 
+    // Which area a cat dragged to world point p goes in: the play area if
+    // it's over the strip and no other cat is out there.
+    function zoneAt(p, cat = null) {
+      const other = yardCat();
+      return p.y >= yard.y0 - 24 && (!other || other === cat) ? 'yard' : 'room';
+    }
+
     function endDrag(ev) {
       if (ev.pointerId !== drag.id) return;
       removeEventListener('pointermove', onDragMove);
@@ -1453,7 +1612,7 @@
       removeEventListener('pointercancel', endDrag);
       document.body.classList.remove('dragging');
       trashEl.classList.remove('armed');
-      const { e, def, moved, ghost, homeX, homeY } = drag;
+      const { e, def, moved, ghost, homeX, homeY, homeZone } = drag;
       drag = null;
       ghost?.remove();
       const cancelled = ev.type === 'pointercancel';
@@ -1465,15 +1624,21 @@
       if (def) {                                            // new thing from the bar
         if (!cancelled && isOver(sceneEl, ev)) {
           const p = toWorld(ev.clientX, ev.clientY);
-          emote(spawn(def, p.x, p.y), '✨');
+          const zone = def.kind === 'cat' ? zoneAt(p) : 'room';   // only cats go out to play
+          emote(spawn(def, p.x, p.y, { zone }), '✨');
         }
         return;
       }
-      if (e.kind === 'cat') act(e, 'sit', 0.8);
+      if (e.fixed) return;
       if (!cancelled && isOver(trashEl, ev)) {              // put it back while we ask
-        e.x = homeX;
-        e.y = homeY;
+        Object.assign(e, { x: homeX, y: homeY, zone: homeZone });
+        if (e.kind === 'cat') act(e, 'sit', 0.8);
         confirmDelete(e);
+        return;
+      }
+      if (e.kind === 'cat') {
+        if (e.zone !== homeZone) say(e, e.zone === 'yard' ? 'Wheee!' : 'Home!');
+        act(e, 'sit', 0.8);
       }
     }
 
@@ -1497,7 +1662,7 @@
     const frameIcon = (cat, anim) => thumb({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, fitScale({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, 28));
     const MENU_ACTIONS = [
       { label: 'Pet', icon: () => uiIcon('ui/paw.png'), run: pet },
-      { label: 'Feed', icon: () => uiIcon('ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (emote(cat, '🍽️'), act(cat, 'sit', 2)) },
+      { label: 'Feed', icon: () => uiIcon('ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (say(cat, 'No food?'), act(cat, 'sit', 2)) },
       { label: 'Play', icon: () => thumb(CATALOG.find(d => d.name === 'Blue ball'), 2), run: cat => pursue(cat, 'bored') || zoomies(cat) },
       { label: 'Nap', icon: () => uiIcon('ui/sleeping-cat.png'), run: cat => pursue(cat, 'tired') },
       { label: 'Sit', icon: cat => frameIcon(cat, 'sit'), run: cat => act(cat, 'sit', rand(4, 6)) },
@@ -1533,6 +1698,7 @@
       settle(cat);
       act(cat, 'sit', Infinity);
       cat.waiting = true;
+      say(cat, 'Mew?');
       nameInput.value = cat.name;
       catMenu.setAttribute('aria-label', cat.name);
       document.getElementById('cat-actions').replaceChildren(...MENU_ACTIONS.map(({ label, icon, run }) => {
@@ -1576,7 +1742,7 @@
       nameInput.addEventListener('input', () => {
         const name = nameInput.value.trim();
         if (!menuCat || !name) return;
-        menuCat.name = menuCat.tag.text = name;
+        rename(menuCat, name);
         catMenu.setAttribute('aria-label', name);
       });
       nameInput.addEventListener('keydown', ev => { if (ev.key === 'Enter') catMenu.hidePopover(); });
@@ -1704,9 +1870,12 @@
 
     function populate() {
       const f = floorBox();
-      for (const [name, fx, fy] of START) {
-        spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
+      for (const [name, fx, fy, extra] of START) {
+        const e = spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
+        if (extra?.name) rename(e, extra.name);
       }
+      spawn(PLAY_TREE, yard.x0, yard.y1, { zone: 'yard', fixed: true });
+      placeTree();
     }
 
     // Back to the starting room: default room type, starting cats and things.
@@ -1718,7 +1887,7 @@
         unlink(e);
       }
       entities.length = 0;
-      for (const child of fx.removeChildren()) child.destroy();   // pop-ups and effects
+      for (const child of [...fx.removeChildren(), ...talk.removeChildren()]) child.destroy({ children: true });   // pop-ups, effects, bubbles
       emotes.length = 0;
       setRoom(DEFAULT_ROOM);
       setSky(DEFAULT_SKY);
@@ -1841,6 +2010,7 @@
         for (const e of [...entities]) if (!e.dead && !held(e)) UPDATE[e.kind]?.(e, dt);
         for (const e of entities) draw(e);
         updateEmotes(dt);
+        updateBubbles(dt);
         updateMenu(dt);
       });
     }

@@ -32,6 +32,7 @@ PIECES = {
     'paw': (327, 153, 35, 30),
     'fish': (470, 195, 20, 11),
     'sleeping-cat': (466, 811, 43, 32),
+    'bubble': (215, 663, 32, 18),          # speech bubble, tail at the bottom right
 }
 
 # The panel's inside, below the ears and within the outline, in panel pixels.
