@@ -127,6 +127,7 @@
       scrollbar-width: thin;
       scrollbar-color: var(--tan) transparent;
       padding-bottom: 2px;
+      min-height: 56px;                     /* its height before the items are added, so the room doesn't jump */
     }
     .group, .group > div { display: flex; gap: 6px; }
     .group > div[hidden] { display: none; }
@@ -279,6 +280,19 @@
       font-size: 13px;
     }
     .cat-actions img { height: 26px; width: auto; }
+    .cat-moods-part { margin-top: 8px; padding-top: 6px; border-top: 2px dashed var(--sand); }
+    .cat-moods-part[hidden] { display: none; }
+    .cat-moods-part h3 { margin: 0 0 4px; font-size: 14px; text-align: center; }
+    .cat-moods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .cat-moods button {
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 1px;
+      height: 54px;
+      padding: 0;
+      font-size: 12px;
+    }
 
     /* ---- Menus that open under a tool: Sound and Photo ---- */
     .tool-menu {
@@ -395,12 +409,25 @@
       /* Tools on top, the item groups get a full-width row underneath. */
       .bar { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
       .tools { order: -1; width: 100%; justify-content: flex-end; }
-      .palette { flex-basis: 100%; }
+      .palette { flex-basis: 100%; min-height: 48px; }
       .toggle { height: 44px; }
       .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
       .tools { gap: 4px; }
       .tool, .trash { width: 48px; font-size: 11px; }
+    }
+    @media (max-height: 500px) {
+      /* Phones on their side: a slimmer bar leaves the room more height. */
+      .bar { gap: 6px; padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
+      .palette { min-height: 44px; }
+      .toggle { height: 40px; }
+      .toggle .sign { width: 22px; height: 22px; }
+      .item { width: 40px; height: 40px; }
+      .tools { gap: 4px; }
+      .tool, .trash { width: 52px; font-size: 11px; }
+      .tool svg { width: 20px; height: 20px; }
+      .tool canvas, .tool .sky-thumb { width: 24px; height: 20px; }
+      .cat-menu { max-height: calc(100dvh - 16px); overflow-y: auto; }   /* scrolls rather than running off the screen */
     }
     @media (prefers-reduced-motion: reduce) {
       #scene, .trash { transition: none; }
@@ -472,6 +499,10 @@
     </label>
     <div class="needs" id="cat-needs"></div>
     <div class="cat-actions" id="cat-actions"></div>
+    <section id="cat-moods-part" class="cat-moods-part" aria-labelledby="cat-moods-title" hidden>
+      <h3 id="cat-moods-title">Moods</h3>
+      <div class="cat-moods" id="cat-moods"></div>
+    </section>
   </div>
 
   <!-- Opens under the Sound button. Music and cat sounds are switched separately. -->
@@ -564,20 +595,26 @@
     // phones). Cat 1 is drawn at twice the detail of the others, hence 2 vs 4.
     // Cat sheets are strips of square frames; the frame count comes from the
     // image size, so only the file names are listed here.
+    // Every cat has CAT_ANIMS; some have more. The cream cat has a whole set
+    // of moods (see Moods), the others a second idle where they look round.
     const CAT_ANIMS = ['idle', 'run', 'sit', 'sleep', 'jump', 'attack'];
+    const MOOD_ANIMS = ['happy', 'box1', 'box2', 'box3', 'dance', 'excited', 'surprised', 'tickle', 'crying', 'dead2'];
     const CATS = [
-      { name: 'Cream cat', dir: 'cream', scale: 2, anims: [...CAT_ANIMS, 'happy'] },
-      { name: 'Tiger cat', dir: 'tiger', scale: 4, anims: CAT_ANIMS },
+      { name: 'Cream cat', dir: 'cream', scale: 2, anims: [...CAT_ANIMS, ...MOOD_ANIMS] },
+      { name: 'Tiger cat', dir: 'tiger', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
       { name: 'Batman cat', dir: 'batman', scale: 4, anims: CAT_ANIMS },
-      { name: 'Egyptian cat', dir: 'egyptian', scale: 4, anims: CAT_ANIMS },
-      { name: 'Siamese cat', dir: 'siamese', scale: 4, anims: CAT_ANIMS },
-      { name: 'Calico cat', dir: 'calico', scale: 4, anims: CAT_ANIMS },
-      { name: 'Odd-eyed cat', dir: 'odd-eyed', scale: 4, anims: CAT_ANIMS },
+      { name: 'Egyptian cat', dir: 'egyptian', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
+      { name: 'Siamese cat', dir: 'siamese', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
+      { name: 'Calico cat', dir: 'calico', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
+      { name: 'Odd-eyed cat', dir: 'odd-eyed', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
     ];
     const catUrl = (cat, anim) => `assets/cats/${cat.dir}/${anim}.png`;
 
     // "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps)
-    const ANIM_SPEED = { idle: 0.1, run: 0.22, sit: 0.07, sleep: 0.04, jump: 0.25, attack: 0.25, happy: 0.12 };
+    const ANIM_SPEED = {
+      idle: 0.1, idle2: 0.12, run: 0.22, sit: 0.07, sleep: 0.04, jump: 0.25, attack: 0.25, happy: 0.12,
+      box1: 0.1, box2: 0.12, box3: 0.14, dance: 0.14, excited: 0.12, surprised: 0.14, tickle: 0.1, crying: 0.1,
+    };
 
     // frame = [x, y, w, h] of the first frame; `frames` more follow every `stride` px.
     // kind = how cats use it (see USES below).
@@ -857,7 +894,7 @@
     const FX_SPEED = 0.25;                              // ≈ 15 fps, the speed the GIFs were made for
     // Pop-ups shown as a pixel effect; any other emoji floats up as text.
     const EMOTE_EFFECT = { '❤️': 'hearts', '✨': 'sparkle', '💤': 'sleep', '💨': 'smoke', '❗': 'alert',
-                           '💢': 'scrap', '😋': 'music' };
+                           '💢': 'scrap', '😋': 'music', '🎵': 'music' };
 
     // ------------------------------------------------------------------
     // Helpers
@@ -875,7 +912,9 @@
     // Also finds the bounds of the opaque pixels across all frames so the
     // sprite can be anchored at its feet – centred on the body, bottom on the
     // lowest pixel. That keeps every animation standing on the same spot
-    // instead of hopping around when it switches or flips direction.
+    // instead of hopping around when it switches or flips direction. `hit`
+    // is the same box around the feet: only that part is clickable, so the
+    // empty corners of a picture don't hide what's behind it.
     // Done once at load time, never per frame.
     function cut(texture, [x, y, w, h], count = 1, stride = w) {
       const img = texture.source.resource;
@@ -901,7 +940,8 @@
       return {
         textures, img, foot,
         anchor: { x: foot.x / w, y: foot.y / h },
-        crop: [x + left, y + top, right - left + 1, bottom - top + 1],     // opaque part of frame 0
+        crop: [x + left, y + top, right - left + 1, bottom - top + 1],     // opaque part, where frame 0 is on the sheet
+        hit: new PIXI.Rectangle(left - foot.x - 1, top - foot.y - 1, right - left + 3, bottom - top + 3),
       };
     }
 
@@ -1101,7 +1141,15 @@
     // (view.x + px·k, view.y + py·k), and everything else is sized to match.
     const view = { k: ROOM.base, x: 0, y: 0 };
     const unit = () => view.k / ROOM.base;
-    const sizeOf = def => Math.max(1, Math.round(def.scale * unit()));
+    // A whole-number size keeps the pixel art crisp, and is used whenever
+    // it's near enough. On small screens it can be far off (a shelf at 1×
+    // in a room drawn at 0.55×, nearly twice too big), so there things get
+    // their exact size instead.
+    function scaleAt(def, k) {
+      const s = (def.scale * k) / ROOM.base, whole = Math.round(s);
+      return whole >= 1 && whole / s >= 0.75 && whole / s <= 1.35 ? whole : s;
+    }
+    const sizeOf = def => scaleAt(def, view.k);
 
     // The play area: a strip of ground along the bottom of the screen where
     // cats' feet can go, with the cat tree at its left end.
@@ -1121,7 +1169,7 @@
       // it, the room also clears the tree's height.
       let above = height - strip;
       let k = zoomFor(above);
-      const treeScale = Math.max(1, Math.round(PLAY_TREE.scale * k / ROOM.base));
+      const treeScale = scaleAt(PLAY_TREE, k);
       const [, , tw, th] = PLAY_TREE.look.crop;
       if ((width - cw * k) / 2 < tw * treeScale + 16) {
         above = height - Math.max(strip, th * treeScale + 8);
@@ -1142,6 +1190,8 @@
         const move = e.zone === 'yard' ? inYard : inRoom;
         [e.x, e.y] = move(e.x, e.y);
         if (e.tx !== undefined) [e.tx, e.ty] = move(e.tx, e.ty);
+        for (const pt of e.route ?? []) [pt.x, pt.y] = move(pt.x, pt.y);   // where it's heading
+        for (const pt of e.hopTo ? [e.hopTo, e.hopFrom] : []) { [pt.x, pt.y] = move(pt.x, pt.y); pt.lift *= r; }
         e.vx *= r;
         e.vy *= r;
         e.lift *= r;
@@ -1228,13 +1278,7 @@
       sprite.anchor.copyFrom(def.look.anchor);
       sprite.eventMode = 'static';
       sprite.cursor = fixed ? 'pointer' : 'grab';
-      if (def.kind !== 'cat') {
-        // Only the visible part is clickable, so a plant's empty corners
-        // don't hide what's behind it. (Cats change shape as they move, so
-        // they keep their whole frame.)
-        const [cx, cy, cw, ch] = def.look.crop, [fx, fy, fw, fh] = def.frame;
-        sprite.hitArea = new PIXI.Rectangle(cx - fx - sprite.anchor.x * fw, cy - fy - sprite.anchor.y * fh, cw, ch);
-      }
+      sprite.hitArea = def.look.hit;                      // a cat's changes with its animation (see play)
       const e = { def, kind: def.kind, sprite, x, y, zone, fixed, lift: 0, z: 0, vx: 0, vy: 0,
                   dir: def.kind === 'cat' && Math.random() < 0.5 ? -1 : 1 };
       sprite.on('pointerdown', ev => startDrag({ e }, ev));
@@ -1501,7 +1545,8 @@
       cat.anim = name;
       cat.sprite.textures = a.textures;
       cat.sprite.anchor.copyFrom(a.anchor);
-      cat.sprite.animationSpeed = ANIM_SPEED[name];
+      cat.sprite.hitArea = a.hit;
+      cat.sprite.animationSpeed = ANIM_SPEED[name] ?? ANIM_SPEED.idle;
       cat.sprite.loop = true;
       cat.sprite.gotoAndPlay(0);
     }
@@ -1555,14 +1600,19 @@
 
     // What a content cat does next, with how likely each is.
     const PASTIMES = [
-      [5, cat => { const to = spotFor(cat); goTo(cat, to.x, to.y, () => act(cat, pick(['idle', 'sit']), rand(0.6, 1.8))); }],
-      [3, cat => act(cat, pick(['idle', 'sit', 'sit']), rand(1.2, 3))],
+      [5, cat => { const to = spotFor(cat); goTo(cat, to.x, to.y, () => act(cat, rest(cat), rand(0.6, 1.8))); }],
+      [3, cat => act(cat, rest(cat), rand(1.2, 3))],
       [2, sniff],
       [cat => perchesFor(cat).length ? 2 : 0, cat => use(cat, pick(perchesFor(cat)))],
       [cat => 1 + cat.needs.bored * 3, zoomies],
       [cat => entities.some(c => c !== cat && free(c) && c.zone === cat.zone) ? 1.5 : 0, tag],
       [1, cat => cat.def.anim.happy && Math.random() < 0.5 ? act(cat, 'happy', 1.2) : actOnce(cat, 'jump', 0.9)],
+      // A cat with moods also hides in its box, and dances (more so when the music's on).
+      [cat => cat.def.anim.box1 ? 1.2 : 0, boxTime],
+      [cat => cat.def.anim.dance ? (sound.music ? 2 : 0.4) : 0, dance],
     ];
+    // Standing about: sitting mostly, sometimes looking round.
+    const rest = cat => pick(['idle', 'sit', 'sit', ...(cat.def.anim.idle2 ? ['idle2'] : [])]);
     function pickWeighted(list, cat) {
       const weights = list.map(([w]) => (typeof w === 'function' ? w(cat) : w));
       let r = Math.random() * weights.reduce((a, b) => a + b, 0);
@@ -1619,7 +1669,7 @@
       else if (need === 'hunger' && (insist || Math.random() < 0.5)) {   // no food: beg by an empty bowl
         const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && e.zone === cat.zone && !held(e)));
         if (!bowl) return false;
-        goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); say(cat, 'Feed me!'); act(cat, 'sit', 3); });
+        goTo(cat, besideX(cat, bowl), bowl.y + 1, () => { face(cat, bowl); say(cat, 'Feed me!'); act(cat, cat.def.anim.crying ? 'crying' : 'sit', 3); });
       } else return false;
       return true;
     }
@@ -1653,6 +1703,11 @@
     }
 
     function eat(cat, food) {
+      if (cat.def.anim.excited && Math.random() < 0.5) return act(cat, 'excited', 0.9, () => munch(cat, food));   // food!
+      munch(cat, food);
+    }
+    function munch(cat, food) {
+      if (food.dead) return;
       act(cat, 'sit', 3, () => {
         emote(cat, '😋');
         if (food.kind === 'fish') {
@@ -1787,16 +1842,76 @@
       const asleep = cat.anim === 'sleep';
       settle(cat);
       if (asleep) {
+        if (cat.def.anim.surprised) return gasp(cat);
         emote(cat, '❗');
         say(cat, 'Hmph!');
         return actOnce(cat, 'jump', 0.8);
       }
+      if (cat.def.anim.tickle && Math.random() < 0.5) return tickle(cat);   // rolls over for a belly rub
       emote(cat, '❤️');
       say(cat, 'Purr~');
       relieve(cat, 'lonely', 0.5);
       relieve(cat, 'bored', 0.2);
       act(cat, cat.def.anim.happy ? 'happy' : 'jump', 1.5);
     }
+
+    // ---- Moods: for cats with the animations for them (the cream cat) ----
+    // In and out of a cardboard box: it pops up, looks round, wags its
+    // tail, then ducks back down.
+    function boxTime(cat) {
+      emote(cat, '💨');
+      say(cat, pick(['Box!', 'Mine!', 'Mrrp!']));
+      actOnce(cat, 'box3', 1.4, () => act(cat, 'box1', rand(3, 5), () => act(cat, 'box2', rand(2, 3), () => {
+        relieve(cat, 'bored', 0.4);
+        actOnce(cat, 'box3', 1.4, () => emote(cat, '💨'));
+      })));
+    }
+    function dance(cat) {
+      say(cat, pick(['La la~', 'Nya nya~', 'Mew mew~']));
+      act(cat, 'dance', rand(2.5, 4), () => relieve(cat, 'bored', 0.3), every(1.2, () => emote(cat, '🎵')));
+      emote(cat, '🎵');
+    }
+    function cheer(cat) {
+      emote(cat, '✨');
+      say(cat, pick(['Yay!', 'Mrrp!!']));
+      act(cat, 'excited', 1.8);
+    }
+    function gasp(cat) {
+      emote(cat, '❗');
+      say(cat, pick(['Mrow?!', 'Eek!']));
+      act(cat, 'surprised', 1.4);
+    }
+    function tickle(cat) {
+      emote(cat, '❤️');
+      say(cat, 'Purr~');
+      relieve(cat, 'lonely', 0.5);
+      relieve(cat, 'bored', 0.2);
+      act(cat, 'tickle', 2.6);
+    }
+    function cry(cat) {
+      say(cat, pick(['Mew…', 'Sniff…']));
+      act(cat, 'crying', 3);
+    }
+    // Flops over and lies there for a bit.
+    function flop(cat) {
+      say(cat, '*flop*');
+      actOnce(cat, 'dead2', 0.6, () => hold(cat, rand(2, 3.5)));
+    }
+    // Stay just as it is (say, on the last frame of a one-off animation).
+    const hold = (cat, time) => Object.assign(cat, { mode: 'act', time, next: null, tick: null });
+
+    // The menu's Moods; a cat gets the ones it has the animation for.
+    // `frame` is the one shown on the button.
+    const MOODS = [
+      { label: 'Box', anim: 'box1', frame: 4, run: boxTime },
+      { label: 'Dance', anim: 'dance', frame: 0, run: dance },
+      { label: 'Yay!', anim: 'excited', frame: 0, run: cheer },
+      { label: 'Gasp', anim: 'surprised', frame: 0, run: gasp },
+      { label: 'Tickle', anim: 'tickle', frame: 0, run: tickle },
+      { label: 'Loaf', anim: 'happy', frame: 0, run: cat => act(cat, 'happy', rand(3, 5)) },
+      { label: 'Cry', anim: 'crying', frame: 0, run: cry },
+      { label: 'Flop', anim: 'dead2', frame: 4, run: flop },
+    ];
 
     function updateCat(cat, dt) {
       for (const k in NEED_RATE) cat.needs[k] = Math.min(1, cat.needs[k] + NEED_RATE[k] * dt);
@@ -2227,7 +2342,7 @@
     // A cat jumps from where it is to `to` ({ x, y, lift }) in an arc,
     // then does `then`. Used to get on and off furniture.
     function hop(cat, to, then = null, time = 0.5) {
-      const from = { x: cat.x, y: cat.y, lift: cat.lift };
+      const from = cat.hopFrom = { x: cat.x, y: cat.y, lift: cat.lift };   // kept on the cat so a resize can move them
       let t = 0;
       cat.hopTo = to;
       face(cat, to);
@@ -2574,7 +2689,8 @@
       if (e.kind !== 'cat') touched();
       if (e.kind === 'cat') {
         if (e.zone !== homeZone) say(e, e.zone === 'yard' ? 'Wheee!' : 'Home!');
-        act(e, 'sit', e.on ? rand(3, 5) : 0.8);
+        if (e.zone === 'yard' && e.zone !== homeZone && e.def.anim.excited) act(e, 'excited', 1.2);
+        else act(e, 'sit', e.on ? rand(3, 5) : 0.8);
       }
     }
 
@@ -2702,7 +2818,12 @@
       { need: 'lonely', label: 'Love', colour: '#e89a9a' },
     ];
     const uiIcon = src => Object.assign(document.createElement('img'), { src, alt: '' });
-    const frameIcon = (cat, anim) => thumb({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, fitScale({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, 28));
+    // A picture of one frame of a cat's animation, about `box` px big.
+    function frameIcon(cat, anim, frame = 0, box = 28) {
+      const a = cat.def.anim[anim] ?? cat.def.anim.idle, [x, y, w, h] = a.crop;
+      const look = { img: a.img, crop: [x + frame * a.textures[0].frame.width, y, w, h] };
+      return thumb({ look }, fitScale({ look }, box));
+    }
     const MENU_ACTIONS = [
       { label: 'Pet', icon: () => uiIcon('assets/ui/paw.png'), run: pet },
       { label: 'Feed', icon: () => uiIcon('assets/ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (say(cat, 'No food?'), act(cat, 'sit', 2)) },
@@ -2744,18 +2865,23 @@
       say(cat, 'Mew?');
       nameInput.value = cat.name;
       catMenu.setAttribute('aria-label', cat.name);
-      document.getElementById('cat-actions').replaceChildren(...MENU_ACTIONS.map(({ label, icon, run }) => {
+      const button = (label, icon, run) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'tile';
-        b.append(icon(cat), label);
+        b.append(icon, label);
         b.addEventListener('click', () => {
           cat.waiting = false;
           catMenu.hidePopover();
           if (!cat.dead) { settle(cat); run(cat); }
         });
         return b;
-      }));
+      };
+      document.getElementById('cat-actions').replaceChildren(...MENU_ACTIONS.map(({ label, icon, run }) => button(label, icon(cat), run)));
+      // Moods only for a cat that has them.
+      const moods = MOODS.filter(m => cat.def.anim[m.anim]);
+      document.getElementById('cat-moods').replaceChildren(...moods.map(({ label, anim, frame, run }) => button(label, frameIcon(cat, anim, frame, 24), run)));
+      document.getElementById('cat-moods-part').hidden = !moods.length;
       showNeeds(cat);
       catMenu.showPopover();
       placeMenu();
