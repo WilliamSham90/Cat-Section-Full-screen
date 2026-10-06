@@ -1,4 +1,4 @@
-# Cat Room
+# Cat Playground
 
 A cozy pixel-art cat room that runs in the browser. Drag cats, food, toys,
 beds and furniture into an isometric room, watch the cats get on with their
@@ -20,13 +20,14 @@ then open <http://localhost:8000>. Any static server works (VS Code Live
 Server, `npx serve`, …).
 
 Pushing to `main` publishes the site to GitHub Pages
-(`.github/workflows/static.yml`). Only `index.html` and `assets/` are
-published.
+(`.github/workflows/static.yml`). Only `index.html`, `site.webmanifest` and
+`assets/` are published.
 
 ## Layout
 
 ```
 index.html            the whole app: markup, styles and script
+site.webmanifest      name, colours and icons for "add to home screen"
 assets/               everything the page loads
   cats/<cat>/         one strip of frames per animation: idle.png, run.png, sit.png, …
   items/              food/, toys/, beds/, furniture/, decor/
@@ -36,6 +37,7 @@ assets/               everything the page loads
   effects/            pixel effects                    ← made by tools/build_effects.py
   audio/sfx/          cat sounds                       ← made by tools/build_audio.py
   audio/music/        background music                 ← made by tools/build_audio.py
+  icons/              favicon and app icons            ← made by tools/build_icons.py
   vendor/pixi.min.js  PixiJS 8.22.0, the renderer
 source/               originals that the tools turn into assets (not published)
   ui/                 cat-ui.png and pastel-ui.png sheets
@@ -58,6 +60,7 @@ the repository root:
 | `python3 tools/build_ui.py` | `assets/ui/` from `source/ui/cat-ui.png` | Pillow |
 | `python3 tools/build_effects.py` | `assets/effects/` from `source/effects/` | Pillow |
 | `python3 tools/build_audio.py` | `assets/audio/` from `source/sounds/` and `source/music/` | ffmpeg |
+| `python3 tools/build_icons.py` | `assets/icons/` (favicon, home-screen and app icons) from Coco's sprite | Pillow |
 
 Install Pillow with `pip install pillow`.
 
