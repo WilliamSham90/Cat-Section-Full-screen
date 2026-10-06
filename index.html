@@ -76,7 +76,8 @@
     .item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .item canvas, .ghost, .pic canvas { image-rendering: pixelated; pointer-events: none; }
 
-    .trash {
+    .tools { flex: none; display: flex; gap: 8px; }
+    .tool, .trash {
       flex: none;
       width: 72px;
       display: grid;
@@ -89,6 +90,18 @@
       font-size: 11px;
       transition: background-color .15s, border-color .15s, color .15s, transform .15s;
     }
+    .tool {
+      padding: 4px;
+      background: var(--slot);
+      border-style: solid;
+      color: var(--text);
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .tool:hover { background: var(--slot-hover); }
+    .tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .tool canvas { display: block; width: 32px; height: 28px; }
+    .dragging .tool { pointer-events: none; }
     .dragging .trash { border-color: var(--muted); }
     .trash.armed {
       background: color-mix(in srgb, var(--danger) 18%, transparent);
@@ -97,14 +110,11 @@
       transform: scale(1.06);
     }
 
-    /* ---- Scene: the whole area below the bar is floor ---- */
+    /* ---- Scene: the room sits in the middle of this backdrop ---- */
     #scene {
       position: relative;
       min-height: 0;
-      background:
-        linear-gradient(to bottom, rgb(0 0 0 / .25), transparent 35%),
-        repeating-linear-gradient(to bottom, transparent 0 47px, rgb(0 0 0 / .14) 47px 48px),
-        #37313f;
+      background: radial-gradient(ellipse at 50% 55%, #302c3e, var(--bg) 70%);
     }
     #scene canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 
@@ -124,6 +134,7 @@
     dialog::backdrop { background: rgb(0 0 0 / .55); }
     dialog p { margin: 8px 0 18px; font-size: 16px; }
     .pic { display: grid; place-items: center; min-height: 64px; }
+    .pic:empty { display: none; }
     .actions { display: flex; justify-content: center; gap: 8px; }
     .actions button {
       font: inherit;
@@ -137,23 +148,63 @@
     .actions button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .actions .danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
+    /* ---- Room picker ---- */
+    #rooms { width: min(560px, calc(100vw - 32px)); }
+    #rooms h2 { margin: 0 0 14px; font-size: 16px; }
+    .room-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .room-grid button {
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+      padding: 8px 4px 6px;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      background: var(--slot);
+      color: var(--muted);
+      font: 12px/1.2 system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .room-grid button:hover { background: var(--slot-hover); color: var(--text); }
+    .room-grid button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .room-grid button[aria-current="true"] { border-color: var(--focus); color: var(--text); }
+    .room-grid canvas { width: 64px; height: 56px; }
+
     @media (max-width: 600px) {
       .bar { gap: 8px; padding: 6px 8px; }
       .group h2 { display: none; }
       .item { width: 44px; height: 44px; }
-      .trash { width: 56px; }
+      .tools { gap: 6px; }
+      .tool, .trash { width: 56px; }
     }
   </style>
 </head>
 <body>
   <header class="bar" aria-label="Add cats and objects: drag one into the scene, or click it">
     <div class="palette" id="palette"></div>
-    <div class="trash" id="trash" title="Drag something here to delete it">
-      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
-      </svg>
-      Trash
+    <div class="tools">
+      <button type="button" class="tool" id="room-button" title="Choose a room" aria-haspopup="dialog">
+        <span id="room-pic" aria-hidden="true"></span>
+        Room
+      </button>
+      <button type="button" class="tool" id="reset" title="Put the room back the way it started">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
+        </svg>
+        Reset
+      </button>
+      <div class="trash" id="trash" title="Drag something here to delete it">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
+        </svg>
+        Trash
+      </div>
     </div>
   </header>
   <main id="scene"></main>
@@ -161,11 +212,19 @@
   <dialog id="confirm" aria-labelledby="confirm-text">
     <form method="dialog">
       <div class="pic" id="confirm-pic"></div>
-      <p id="confirm-text">Delete <strong id="confirm-name"></strong> from the scene?</p>
+      <p id="confirm-text"></p>
       <div class="actions">
-        <button value="cancel" autofocus>Keep it</button>
-        <button value="delete" class="danger">Delete</button>
+        <button value="cancel" id="confirm-no" autofocus></button>
+        <button value="ok" id="confirm-yes" class="danger"></button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="rooms" aria-labelledby="rooms-title">
+    <form method="dialog">
+      <h2 id="rooms-title">Choose a room</h2>
+      <div class="room-grid" id="room-grid"></div>
+      <div class="actions"><button value="">Close</button></div>
     </form>
   </dialog>
 
@@ -205,6 +264,12 @@
       group, name, src: ITEM + file, ...props,
       frame: [(i % cols) * size, Math.floor(i / cols) * size, size, size],
     }));
+    // The room decorations sheet holds pictures of every size, so each one
+    // is listed by name with its [x, y, w, h] on the sheet. Its pixels match
+    // the room pictures, so scale 2 keeps them in proportion with the room.
+    const DECOR = ITEM + 'Decorations/CatRoomDecorations.png';
+    const decor = (group, props, list) => list.map(([name, frame]) => ({ group, name, src: DECOR, frame, scale: 2, ...props }));
+
     const ITEMS = [
       ...cells('Food', 'CatToys/CatBowls.png', 2, 16, ['Green bowl', 'Blue bowl', 'Purple bowl', 'Red bowl'], { kind: 'bowl', scale: 3 }),
       ...cells('Food', 'CatToys/fish.png', 2, 16, ['Blue fish', 'Orange fish', 'Silver fish', 'Yellow fish'], { kind: 'fish', scale: 3 }),
@@ -214,23 +279,89 @@
       { group: 'Toys', name: 'Toy mouse', src: ITEM + 'CatToys/Mouse-Sheet.png', kind: 'mouse', scale: 2, frame: [0, 0, 32, 32], frames: 4, stride: 42 },
       { group: 'Toys', name: 'Feather wand', src: ITEM + 'CatToys/CatToy.png', kind: 'wand', scale: 3, frame: [0, 0, 32, 32], frames: 6 },
       ...['Blue', 'Brown', 'Green', 'Pink', 'Purple', 'Red'].flatMap(c =>
-        cells('Beds', `Beds/CatBed${c}.png`, 1, 64, [`${c} bed`], { kind: 'bed', scale: 3 })),
+        cells('Beds', `Beds/CatBed${c}.png`, 1, 64, [`${c} bed`], { kind: 'bed', scale: 3, seat: 7 })),
+      // `seat` = how far above its feet (in sheet pixels) a cat lies in the bed.
+      ...decor('Beds', { kind: 'bed', seat: 24 }, [
+        ['Blue cushion', [202, 138, 110, 82]], ['Grey cushion', [329, 138, 110, 82]],
+        ['Red cushion', [202, 236, 110, 82]], ['Olive cushion', [329, 236, 110, 82]],
+        ['Purple cushion', [202, 326, 110, 82]], ['Teal cushion', [329, 326, 110, 82]],
+      ]),
       ...cells('Hideaways', 'Beds/CatHomes.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3 }),
       ...cells('Hideaways', 'Beds/CatBoxes.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
         'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3 }),
       ...cells('Furniture', 'CatToys/toyss.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
       ...cells('Furniture', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 3 }),
       ...cells('Furniture', 'PlayGrounds/CatPlayGroundLighter.png', 1, 128, ['Light cat tree'], { kind: 'tree', scale: 3 }),
+      ...decor('Furniture', { kind: 'post' }, [
+        ['Peach scratching post', [191, 17, 64, 110]], ['Olive scratching post', [287, 16, 64, 110]],
+        ['Slate scratching post', [383, 16, 64, 110]],
+      ]),
+      // Decor is just for looks: cats walk around it.
+      ...decor('Decor', { kind: 'decor' }, [
+        ['Fig in a brown pot', [140, 299, 45, 108]], ['Fig in a navy pot', [140, 421, 45, 108]],
+        ['Fig in a pink pot', [138, 552, 45, 108]], ['Fig in a blue pot', [138, 685, 45, 108]],
+        ['Pink pot plant', [132, 193, 23, 29]], ['Grey pot plant', [164, 193, 23, 29]],
+        ['Cream pot plant', [132, 226, 23, 29]], ['Mint pot plant', [164, 226, 23, 29]],
+        ['Yellow pot plant', [132, 258, 23, 29]], ['Blue pot plant', [164, 258, 23, 29]],
+        ['Peach shelf', [14, 289, 100, 127]], ['Blue shelf', [12, 416, 100, 128]],
+        ['Green shelf', [9, 544, 100, 128]], ['Purple shelf', [7, 673, 100, 127]],
+        ['Wooden shelf', [7, 801, 100, 127]],
+        ['Cream table', [674, 610, 61, 61]], ['Grey table', [738, 610, 61, 61]],
+        ['Pink table', [802, 610, 61, 61]], ['Teal table', [866, 610, 61, 61]],
+        ['Lilac table', [930, 610, 61, 61]],
+      ]),
     ];
     const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS];
 
     // Platform tops on the cat tree sheet, in sheet pixels [x, y].
     const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
 
-    // What the scene looks like at first.
+    // ------------------------------------------------------------------
+    // Room – one of the isometric room pictures, given a wooden floor and
+    // decorated from the decorations sheet. The room types differ in wall
+    // colour; each also picks its own curtains, blinds and portrait.
+    // ------------------------------------------------------------------
+    const ROOM_TYPES = ['Rose', 'Slate', 'Honey', 'Lilac', 'Sage', 'Teal', 'Pistachio', 'Stone',
+      'Plum', 'Cocoa', 'Cloud', 'Sky', 'Periwinkle', 'Mint', 'Coral']
+      .map((name, i) => ({ name, src: `${ITEM}Rooms/Room${i + 1}.png` }));
+    const DEFAULT_ROOM = 0;
+
+    // All room pictures share this layout, in picture pixels.
+    const ROOM = {
+      crop: [9, 27, 496, 436],                         // the opaque part of the picture
+      floorSeed: [256, 330],                           // any pixel of the bare floor
+      floor: { x: 262, y: 322, rx: 226, ry: 121 },     // floor diamond: centre and half-diagonals
+      base: 2,                                         // catalogue scales assume the room drawn at 2×
+    };
+
+    // Hung on the walls: `at` is the top-left corner in picture pixels; room
+    // type i uses frames[i % frames.length]. The sheet draws each piece for
+    // one wall: curtains, the air vent and the painting face the left wall,
+    // blinds and portraits the right.
+    const WALL_DECOR = [
+      { at: [70, 140], frames: [[674, 306, 93, 139], [770, 301, 93, 139], [866, 299, 93, 139]] },   // curtained window
+      { at: [190, 130], frames: [[79, 226, 38, 62]] },                                                // painting
+      { at: [285, 95], frames: [[864, 3, 64, 123], [928, 4, 64, 123], [864, 129, 64, 123], [928, 130, 64, 123]] },  // window with blinds
+      { at: [375, 140], frames: [[714, 196, 39, 89]] },                                               // plant poster
+      { at: [430, 175], frames: [[452, 200, 25, 46], [484, 201, 25, 46], [515, 200, 25, 46],
+                                 [452, 264, 25, 46], [484, 265, 25, 46], [515, 264, 25, 46]] },        // cat portrait
+    ];
+
+    // Floorboards, in picture pixels: plank colours (picked per board), the
+    // gap between boards, and how wide and long the boards are.
+    const WOOD = {
+      planks: [[196, 138, 90], [186, 126, 80], [205, 150, 102], [178, 120, 76]],
+      seam: [132, 84, 52],
+      width: 10,
+      length: 40,
+    };
+
+    // What the room looks like at first. Positions are fractions of the
+    // floor's width (left → right) and depth (back → front).
     const START = [
-      ['Cream cat', .5, .55], ['Blue bowl', .15, .8], ['Blue bed', .85, .85],
-      ['Blue ball', .38, .75], ['Green scratcher', .68, .45], ['Toy mouse', .22, .4],
+      ['Cream cat', .5, .55], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
+      ['Blue ball', .42, .72], ['Green scratcher', .6, .3], ['Toy mouse', .3, .62],
+      ['Fig in a brown pot', .44, .12], ['Cream table', .18, .58],
     ];
 
     // ------------------------------------------------------------------
@@ -294,6 +425,82 @@
       return k >= 1 ? Math.floor(k) : k;
     };
 
+    // Integer hash: stable "random" picks, so the floorboards never shuffle.
+    const hash = (a, b) => {
+      let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return (h ^ (h >>> 16)) >>> 0;
+    };
+
+    // Paint floorboards over the bare floor of a room picture (in place).
+    // The floor is found by flood-filling from ROOM.floorSeed through pixels
+    // of nearly the same colour, so walls and edges are left alone.
+    function layFloor(ctx, w, h) {
+      const pic = ctx.getImageData(0, 0, w, h);
+      const d = pic.data;
+      const [sx, sy] = ROOM.floorSeed;
+      const seed = (sy * w + sx) * 4;
+      const near = p => d[p * 4 + 3] === 255 && Math.abs(d[p * 4] - d[seed]) <= 12 &&
+        Math.abs(d[p * 4 + 1] - d[seed + 1]) <= 12 && Math.abs(d[p * 4 + 2] - d[seed + 2]) <= 12;
+      const floor = new Uint8Array(w * h);
+      const stack = [sy * w + sx];
+      floor[stack[0]] = 1;
+      while (stack.length) {
+        const p = stack.pop(), x = p % w;
+        for (const n of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w]) {
+          if (n >= 0 && n < w * h && !floor[n] && near(n)) { floor[n] = 1; stack.push(n); }
+        }
+      }
+
+      // Boards run along the right-hand wall. In doubled isometric
+      // coordinates, t = 2y − x stays the same along a board and s = 2y + x
+      // runs along it; each row of boards starts at a different offset.
+      const across = WOOD.width * 2, along = WOOD.length * 2;
+      for (let p = 0; p < w * h; p++) {
+        if (!floor[p]) continue;
+        const x = p % w, y = (p - x) / w;
+        const t = 2 * y - x, row = Math.floor(t / across), inRow = t - row * across;
+        const s = 2 * y + x + hash(row, 7) % along, board = Math.floor(s / along);
+        let [r, g, b] = WOOD.planks[hash(row, board) % WOOD.planks.length];
+        if (inRow < 2 || s - board * along < 2) [r, g, b] = WOOD.seam;           // gap between boards
+        else if (inRow >> 1 === (WOOD.width >> 1) - 1 && hash(board, s / 6 | 0) % 3 === 0) {
+          r -= 14; g -= 14; b -= 14;                                               // grain down the middle
+        }
+        const wall = [1, 2, 3].find(k => !floor[p - k * w]);                      // shade the foot of the walls
+        const shade = wall ? 0.72 + 0.08 * wall : 1;
+        d[p * 4] = r * shade;
+        d[p * 4 + 1] = g * shade;
+        d[p * 4 + 2] = b * shade;
+      }
+      ctx.putImageData(pic, 0, 0);
+    }
+
+    // The full picture for room type i: wooden floor, then the wall decorations.
+    function buildRoom(i) {
+      const img = art[ROOM_TYPES[i].src];
+      const canvas = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      layFloor(ctx, img.width, img.height);
+      for (const { at: [x, y], frames } of WALL_DECOR) {
+        const [fx, fy, fw, fh] = frames[i % frames.length];
+        ctx.drawImage(art[DECOR], fx, fy, fw, fh, x, y, fw, fh);
+      }
+      return canvas;
+    }
+
+    // A small, smoothly shrunk copy of a room picture, `cssW` CSS px wide.
+    function roomThumb(canvas, cssW) {
+      const [x, y, w, h] = ROOM.crop;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const c = Object.assign(document.createElement('canvas'),
+        { width: Math.round(cssW * dpr), height: Math.round((cssW * h / w) * dpr) });
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(canvas, x, y, w, h, 0, 0, c.width, c.height);
+      return c;
+    }
+
     function showError(err) {
       console.error(err);
       const el = document.createElement('div');
@@ -312,7 +519,9 @@
     const sceneEl = document.getElementById('scene');
     const paletteEl = document.getElementById('palette');
     const trashEl = document.getElementById('trash');
-    const dialog = document.getElementById('confirm');
+    const confirmDialog = document.getElementById('confirm');
+    const roomsDialog = document.getElementById('rooms');
+    const roomGrid = document.getElementById('room-grid');
 
     PIXI.TextureStyle.defaultOptions.scaleMode = 'nearest';    // crisp pixel art everywhere
 
@@ -329,9 +538,13 @@
     sceneEl.appendChild(app.canvas);
     new ResizeObserver(() => app.queueResize()).observe(sceneEl);
 
+    const art = {};                                     // url → loaded image, for drawing on canvases
+
     async function loadArt() {
       const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
-      const tex = await PIXI.Assets.load([...new Set(CATALOG.flatMap(urlsOf))]);
+      const urls = [...new Set([...CATALOG.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src)])];
+      const tex = await PIXI.Assets.load(urls);
+      for (const url of urls) art[url] = tex[url].source.resource;
       for (const d of CATALOG) {
         if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
         d.anim = {};
@@ -351,14 +564,72 @@
     // hop, a cat up the cat tree) and things further down the screen are drawn
     // in front.
     const entities = [];
+    const room = new PIXI.Sprite();
     const shadows = new PIXI.Container();
     const world = new PIXI.Container({ sortableChildren: true });
     const fx = new PIXI.Container();
-    app.stage.addChild(shadows, world, fx);
+    app.stage.addChild(room, shadows, world, fx);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
 
-    const unit = () => (app.screen.width < 700 ? 0.5 : 1);  // smaller sprites on phones
+    // The room is drawn as big as fits: picture pixel (px, py) lands on
+    // (view.x + px·k, view.y + py·k), and everything else is sized to match.
+    const view = { k: ROOM.base, x: 0, y: 0 };
+    const unit = () => view.k / ROOM.base;
+    const sizeOf = def => Math.max(1, Math.round(def.scale * unit()));
+
+    function layout() {
+      const { width, height } = app.screen;
+      const [cx, cy, cw, ch] = ROOM.crop;
+      const best = Math.min(width / cw, height / ch) * 0.96;
+      // A whole-number zoom keeps the pixel art crisp; only give that up when it would shrink the room a lot.
+      const k = Math.floor(best) >= 1 && Math.floor(best) / best > 0.85 ? Math.floor(best) : best;
+      const x = Math.round((width - cw * k) / 2 - cx * k);
+      const y = Math.round((height - ch * k) / 2 - cy * k);
+
+      // Carry everything over, so it keeps its place in the room.
+      const r = k / view.k;
+      const move = (px, py) => [x + (px - view.x) * r, y + (py - view.y) * r];
+      for (const e of entities) {
+        [e.x, e.y] = move(e.x, e.y);
+        if (e.tx !== undefined) [e.tx, e.ty] = move(e.tx, e.ty);
+        e.vx *= r;
+        e.vy *= r;
+        e.lift *= r;
+      }
+      Object.assign(view, { k, x, y });
+      room.position.set(x, y);
+      room.scale.set(k);
+      for (const e of entities) { fit(e); clamp(e); }
+    }
+
+    // The floor is a diamond. In the coordinates p = u + v, q = u − v (where
+    // u, v are the offset from its centre in half-diagonals) it is the square
+    // |p|, |q| ≤ 1, which makes staying on it and bouncing off its edges easy.
+    // p runs from the left wall to the front-right edge, q from the front-left
+    // edge to the right wall.
+    function floorBox() {
+      const { x, y, rx, ry } = ROOM.floor;
+      return { x: view.x + x * view.k, y: view.y + y * view.k, rx: rx * view.k, ry: ry * view.k };
+    }
+    const toFloor = (f, x, y) => { const u = (x - f.x) / f.rx, v = (y - f.y) / f.ry; return [u + v, u - v]; };
+    const fromFloor = (f, p, q) => [f.x + ((p + q) / 2) * f.rx, f.y + ((p - q) / 2) * f.ry];
+    // How far in from the edges (in p, q units) something must stand to fit on the floor.
+    const margin = e => Math.min(0.9, e.half / (ROOM.floor.rx * view.k));
+
+    // Pull (x, y) onto the floor, `m` in from its edges. hp / hq say which
+    // edges it was pushed back from: −1 or +1, 0 for neither.
+    function onFloor(x, y, m = 0) {
+      const f = floorBox(), [p, q] = toFloor(f, x, y), lim = 1 - m;
+      const hp = p > lim ? 1 : p < -lim ? -1 : 0;
+      const hq = q > lim ? 1 : q < -lim ? -1 : 0;
+      if (hp || hq) [x, y] = fromFloor(f, hp ? hp * lim : p, hq ? hq * lim : q);
+      return { x, y, hp, hq };
+    }
+    function randomSpot(m = 0) {
+      const [x, y] = fromFloor(floorBox(), rand(m - 1, 1 - m), rand(m - 1, 1 - m));
+      return { x, y };
+    }
 
     function spawn(def, x, y) {
       const sprite = new PIXI.AnimatedSprite(def.look.textures);
@@ -400,23 +671,21 @@
       e.shadow?.destroy();
     }
 
-    // Size and on-screen extents; re-run when the screen crosses the phone breakpoint.
+    // Size and on-screen extents; re-run when the room is resized.
     function fit(e) {
       const [, , w, h] = e.def.look.crop;
-      e.s = Math.max(1, Math.round(e.def.scale * unit()));
+      e.s = sizeOf(e.def);
       e.half = (w * e.s) / 2;
       e.tall = h * e.s;
       e.shadow?.scale.set(e.half * 0.8);
     }
 
-    function bounds(e) {
-      const { width, height } = app.screen;
-      return [e.half, Math.max(e.half, width - e.half), e.tall, Math.max(e.tall, height - 4)];
-    }
+    // Keep an entity on the floor; returns which edges it hit (see onFloor).
     function clamp(e) {
-      const [x0, x1, y0, y1] = bounds(e);
-      e.x = clampTo(e.x, x0, x1);
-      e.y = clampTo(e.y, y0, y1);
+      const at = onFloor(e.x, e.y, margin(e));
+      e.x = at.x;
+      e.y = at.y;
+      return at;
     }
 
     function draw(e) {
@@ -477,7 +746,7 @@
       bowl:    { need: 'hunger', solo: true, ok: b => b.food > 0, use: eat },
       fish:    { need: 'hunger', solo: true, use: eat },
       bed:     { need: 'tired', solo: true, spot: (cat, bed) => bed.x,
-                 use: (cat, bed) => { cat.lift = 7 * bed.s; cat.z = 1; nap(cat); } },
+                 use: (cat, bed) => { cat.lift = bed.def.seat * bed.s; cat.z = 1; nap(cat); } },
       hideout: { need: 'tired', solo: true, spot: (cat, home) => home.x, use: hide },
       post:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5)) },
       wand:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3.5, () => relieve(cat, 'bored', 0.6)) },
@@ -512,9 +781,8 @@
 
     // Run to (x, y), or after `follow` if given, then do `next`.
     function goTo(cat, x, y, next = null, follow = null) {
-      const [x0, x1, y0, y1] = bounds(cat);
-      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow,
-                           tx: clampTo(x, x0, x1), ty: clampTo(y, y0, y1) });
+      const to = onFloor(x, y, margin(cat));
+      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, tx: to.x, ty: to.y });
       play(cat, 'run');
     }
 
@@ -526,6 +794,7 @@
       if (!cat.sprite.visible) {                     // step out of a hideaway
         cat.sprite.visible = true;
         cat.y += 8 * unit();
+        clamp(cat);
       }
     }
 
@@ -536,8 +805,8 @@
       for (const need of urgent) if (pursue(cat, need)) return;
 
       if (Math.random() < 0.5) {
-        const { width, height } = app.screen;
-        goTo(cat, rand(0, width), rand(0, height), () => act(cat, 'idle', rand(1, 3)));
+        const to = randomSpot(margin(cat));
+        goTo(cat, to.x, to.y, () => act(cat, 'idle', rand(1, 3)));
       } else {
         act(cat, pick(['idle', 'sit', 'sit']), rand(2, 5));
       }
@@ -694,14 +963,19 @@
       e.vy = Math.sin(a) * speed * 0.6 * unit();
     }
 
-    // Slide by velocity and bounce off the edges of the scene.
+    // Slide by velocity and bounce off the walls and edges of the floor.
     function slide(e, dt, friction) {
       e.x += e.vx * dt;
       e.y += e.vy * dt;
-      const { x, y } = e;
-      clamp(e);
-      if (e.x !== x) e.vx *= -0.8;
-      if (e.y !== y) e.vy *= -0.8;
+      const { hp, hq } = clamp(e);
+      if (hp || hq) {                                       // flip the velocity across the edge it hit
+        const f = floorBox();
+        let vp = e.vx / f.rx + e.vy / f.ry, vq = e.vx / f.rx - e.vy / f.ry;
+        if (hp && Math.sign(vp) === hp) vp *= -0.8;
+        if (hq && Math.sign(vq) === hq) vq *= -0.8;
+        e.vx = ((vp + vq) / 2) * f.rx;
+        e.vy = ((vp - vq) / 2) * f.ry;
+      }
       const f = Math.exp(-friction * dt);
       e.vx *= f;
       e.vy *= f;
@@ -793,7 +1067,7 @@
       const { e, def } = drag;
       document.body.classList.add('dragging');
       if (def) {
-        const k = Math.max(1, Math.round(def.scale * unit()));
+        const k = sizeOf(def);
         drag.ghost = thumb(def, k);
         drag.ghost.className = 'ghost';
         drag.gw = def.look.crop[2] * k;
@@ -863,13 +1137,89 @@
       }
     }
 
+    // ------------------------------------------------------------------
+    // Dialogs
+    // ------------------------------------------------------------------
+    // Open a modal <dialog>; resolves with the value of the button that
+    // closed it, or '' for Esc.
+    function showDialog(d) {
+      d.returnValue = '';
+      d.showModal();
+      return new Promise(resolve => d.addEventListener('close', () => resolve(d.returnValue), { once: true }));
+    }
+
+    // Yes/no question; `text` is a list of strings and elements. Resolves true for yes.
+    async function ask({ pic = null, text, yes, no }) {
+      document.getElementById('confirm-pic').replaceChildren(...(pic ? [pic] : []));
+      document.getElementById('confirm-text').replaceChildren(...text);
+      document.getElementById('confirm-yes').textContent = yes;
+      document.getElementById('confirm-no').textContent = no;
+      return (await showDialog(confirmDialog)) === 'ok';
+    }
+
     async function confirmDelete(e) {
-      document.getElementById('confirm-name').textContent = e.def.name;
-      document.getElementById('confirm-pic').replaceChildren(thumb(e.def, fitScale(e.def, 64)));
-      dialog.returnValue = '';                              // Esc leaves this untouched
-      dialog.showModal();
-      await new Promise(resolve => dialog.addEventListener('close', resolve, { once: true }));
-      if (dialog.returnValue === 'delete') remove(e);
+      const name = Object.assign(document.createElement('strong'), { textContent: e.def.name });
+      const yes = await ask({ pic: thumb(e.def, fitScale(e.def, 64)), text: ['Delete ', name, ' from the room?'],
+                              yes: 'Delete', no: 'Keep it' });
+      if (yes) remove(e);
+    }
+
+    async function confirmReset() {
+      const yes = await ask({ text: ['Reset the room? Everything goes back to how it was at the start.'],
+                              yes: 'Reset', no: 'Cancel' });
+      if (yes) reset();
+    }
+
+    // ------------------------------------------------------------------
+    // Room type and reset
+    // ------------------------------------------------------------------
+    let roomType = -1;
+
+    function setRoom(i) {
+      if (i === roomType) return;
+      roomType = i;
+      const picture = buildRoom(i);
+      const old = room.texture;
+      room.texture = PIXI.Texture.from(picture, true);
+      if (old !== PIXI.Texture.EMPTY) old.destroy(true);
+      document.getElementById('room-pic').replaceChildren(roomThumb(picture, 32));
+      for (const b of roomGrid.children) b.setAttribute('aria-current', String(b.value === String(i)));
+    }
+
+    async function pickRoom() {
+      if (!roomGrid.children.length) {                     // build the choices the first time only
+        ROOM_TYPES.forEach(({ name }, i) => {
+          const b = document.createElement('button');
+          b.value = i;                                      // closes the dialog with this value
+          b.setAttribute('aria-current', String(i === roomType));
+          b.append(roomThumb(buildRoom(i), 64), `${name} room`);
+          roomGrid.appendChild(b);
+        });
+      }
+      const choice = await showDialog(roomsDialog);
+      if (choice !== '') setRoom(Number(choice));
+    }
+
+    function populate() {
+      const f = floorBox();
+      for (const [name, fx, fy] of START) {
+        spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
+      }
+    }
+
+    // Back to the starting room: default room type, starting cats and things.
+    function reset() {
+      if (drag) endDrag({ pointerId: drag.id, type: 'pointercancel' });
+      for (const e of entities) {
+        e.dead = true;
+        e.sprite.destroy();
+        e.shadow?.destroy();
+      }
+      entities.length = 0;
+      for (const m of emotes) m.t.destroy();
+      emotes.length = 0;
+      setRoom(DEFAULT_ROOM);
+      populate();
     }
 
     // ------------------------------------------------------------------
@@ -895,8 +1245,8 @@
           button.addEventListener('pointerdown', ev => startDrag({ def }, ev));
           button.addEventListener('click', ev => {
             if (ev.detail && dragMoved) return;              // this click just ended a drag
-            const { width, height } = app.screen;
-            emote(spawn(def, rand(.1, .9) * width, rand(.25, .95) * height), '✨');
+            const at = randomSpot();
+            emote(spawn(def, at.x, at.y), '✨');
           });
           row.appendChild(button);
         }
@@ -915,10 +1265,13 @@
     // ------------------------------------------------------------------
     function start() {
       buildPalette();
-      const { width, height } = app.screen;
-      for (const [name, fx, fy] of START) spawn(CATALOG.find(d => d.name === name), width * fx, height * fy);
+      setRoom(DEFAULT_ROOM);
+      layout();
+      populate();
 
-      app.renderer.on('resize', () => entities.forEach(e => { fit(e); clamp(e); }));
+      app.renderer.on('resize', layout);
+      document.getElementById('room-button').addEventListener('click', pickRoom);
+      document.getElementById('reset').addEventListener('click', confirmReset);
 
       // Frame-rate independent via deltaMS; capped so a hidden tab doesn't teleport things.
       app.ticker.add(({ deltaMS }) => {
