@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cat Playground</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐱</text></svg>">
+  <meta name="description" content="A cozy pixel-art room full of cats to play with.">
+  <meta name="theme-color" content="#6e564a">
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="icon" href="assets/icons/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap">
@@ -502,16 +507,22 @@
         ['Peach scratching post', [191, 17, 64, 110]], ['Olive scratching post', [287, 16, 64, 110]],
         ['Slate scratching post', [383, 16, 64, 110]],
       ]),
-      // Decor is just for looks: cats walk around it.
+      // Plants are just for looks: cats walk around them.
       ...decor('Decor', { kind: 'decor' }, [
         ['Fig in a brown pot', [140, 299, 45, 108]], ['Fig in a navy pot', [140, 421, 45, 108]],
         ['Fig in a pink pot', [138, 552, 45, 108]], ['Fig in a blue pot', [138, 685, 45, 108]],
         ['Pink pot plant', [132, 193, 23, 29]], ['Grey pot plant', [164, 193, 23, 29]],
         ['Cream pot plant', [132, 226, 23, 29]], ['Mint pot plant', [164, 226, 23, 29]],
         ['Yellow pot plant', [132, 258, 23, 29]], ['Blue pot plant', [164, 258, 23, 29]],
+      ]),
+      // Shelves and tables: cats jump up on them. `perches` are the spots
+      // they sit on, in the picture's pixels [x, y].
+      ...decor('Decor', { kind: 'perch', perches: [[52, 26]] }, [
         ['Peach shelf', [14, 289, 100, 127]], ['Blue shelf', [12, 416, 100, 128]],
         ['Green shelf', [9, 544, 100, 128]], ['Purple shelf', [7, 673, 100, 127]],
         ['Wooden shelf', [7, 801, 100, 127]],
+      ]),
+      ...decor('Decor', { kind: 'perch', perches: [[30, 20]] }, [
         ['Cream table', [674, 610, 61, 61]], ['Grey table', [738, 610, 61, 61]],
         ['Pink table', [802, 610, 61, 61]], ['Teal table', [866, 610, 61, 61]],
         ['Lilac table', [930, 610, 61, 61]],
@@ -521,13 +532,13 @@
 
     // Fixed scenery, not in the bar: the cat tree that makes the play area.
     // furniture/cat-tree-light.png is a paler version that also fits.
-    const PLAY_TREE = cells('Play area', 'furniture/cat-tree.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2 })[0];
+    // Its platform tops, in the picture's pixels [x, y].
+    const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
+    const PLAY_TREE = cells('Play area', 'furniture/cat-tree.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2, perches: PERCHES })[0];
     // …and a cushion bed at the other end, for cats out there to nap in.
     const PLAY_BED = decor('Play area', { kind: 'bed', seat: 24 }, [['Play-area bed', [202, 138, 110, 82]]])[0];
     const SCENERY = [PLAY_TREE, PLAY_BED];
 
-    // Platform tops on the cat tree picture, in its pixels [x, y].
-    const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
 
     // ------------------------------------------------------------------
     // Room – one of the isometric room pictures, given a wooden floor and
@@ -546,6 +557,15 @@
       floor: { x: 262, y: 322, rx: 226, ry: 121 },     // floor diamond: centre and half-diagonals
       base: 2,                                         // catalogue scales assume the room drawn at 2×
     };
+
+    // Light through the windows, in picture pixels: `sill` is the bottom
+    // edge of the glass, `patch` the bright shape on the floor (the two
+    // points under the sill, then the two far ones). The window with blinds
+    // throws stripes.
+    const WINDOW_LIGHT = [
+      { sill: [[76, 271], [153, 234]], patch: [[92, 306], [169, 265], [259, 310], [182, 351]] },
+      { sill: [[288, 190], [348, 216]], patch: [[272, 225], [332, 256], [252, 296], [192, 265]], stripes: 5 },
+    ];
 
     // Hung on the walls: `at` is the top-left corner in picture pixels; room
     // type i uses frames[i % frames.length]. The sheet draws each piece for
@@ -572,15 +592,16 @@
     // The sky behind the room. By default it follows the viewer's clock: each
     // picture shows from the local hour `from` until the next one starts.
     // The Sky button can also pin one of them, or a plain dark backdrop.
-    // `stars` is how starry it is (0 none, 1 full), for the twinkling stars.
+    // `stars` is how starry it is (0 none, 1 full), for the twinkling stars;
+    // `light` is the [colour, strength] of the light through the windows.
     const SKIES = [
-      { name: 'Fajr', from: 4, src: 'assets/skies/fajr.png', stars: 0 },          // before sunrise
-      { name: 'Dawn', from: 6, src: 'assets/skies/dawn.png', stars: 0 },
-      { name: 'Noon', from: 9, src: 'assets/skies/noon.png', stars: 0 },
-      { name: 'Sunset', from: 17, src: 'assets/skies/sunset.png', stars: 0.45 },
-      { name: 'Night', from: 20, src: 'assets/skies/night.png', stars: 1 },
+      { name: 'Fajr', from: 4, src: 'assets/skies/fajr.png', stars: 0, light: [0xb8c6ff, 0.13] },          // before sunrise
+      { name: 'Dawn', from: 6, src: 'assets/skies/dawn.png', stars: 0, light: [0xffc8a0, 0.16] },
+      { name: 'Noon', from: 9, src: 'assets/skies/noon.png', stars: 0, light: [0xfff0c0, 0.22] },
+      { name: 'Sunset', from: 17, src: 'assets/skies/sunset.png', stars: 0.45, light: [0xffa060, 0.20] },
+      { name: 'Night', from: 20, src: 'assets/skies/night.png', stars: 1, light: [0x9ab8ff, 0.17] },
     ];
-    const DARK_SKY = { name: 'Dark', src: '', stars: 1 };
+    const DARK_SKY = { name: 'Dark', src: '', stars: 1, light: null };
     const DEFAULT_SKY = 0;                                 // Fajr
 
     // Pixel effects: strips of square frames in assets/effects/, made from
@@ -816,6 +837,7 @@
     // in front.
     const entities = [];
     const room = new PIXI.Sprite();
+    const windowLight = new PIXI.Graphics({ blendMode: 'add' });   // drawn in room picture pixels
     const ground = new PIXI.Graphics();                  // the play area's strip
     const shadows = new PIXI.Container();
     const world = new PIXI.Container({ sortableChildren: true });
@@ -824,9 +846,25 @@
     const talk = new PIXI.Container();                   // speech bubbles
     const starLayer = new PIXI.Container();              // twinkling stars (see Stars)
     const shooter = new PIXI.Graphics();                 // the shooting star
-    app.stage.addChild(starLayer, shooter, room, ground, shadows, world, labels, fx, talk);
+    app.stage.addChild(starLayer, shooter, room, windowLight, ground, shadows, world, labels, fx, talk);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
+
+    // While something is carried, it floats a little and a shadow marks
+    // where it will land. The marker is drawn over everything except the
+    // carried thing itself, so it can't be lost behind furniture.
+    const HELD_LIFT = 16;                                 // px at 2× room zoom
+    const dropMarker = new PIXI.Graphics({ zIndex: 1e9 - 1, visible: false });
+    world.addChild(dropMarker);
+    function markDrop(x, y, half) {
+      const rx = Math.max(10, half * 0.8), ry = rx * 0.32;
+      dropMarker.clear()
+        .ellipse(0, 0, rx, ry).fill({ color: 0x000000, alpha: 0.3 })
+        .ellipse(0, 0, rx, ry).stroke({ color: 0xf6e8d6, alpha: 0.9, width: 2 });
+      dropMarker.position.set(Math.round(x), Math.round(y));
+      dropMarker.visible = true;
+    }
+    const hideDrop = () => { dropMarker.visible = false; };
 
     // The room is drawn as big as fits: picture pixel (px, py) lands on
     // (view.x + px·k, view.y + py·k), and everything else is sized to match.
@@ -881,6 +919,8 @@
       Object.assign(yard, next);
       room.position.set(x, y);
       room.scale.set(k);
+      windowLight.position.set(x, y);
+      windowLight.scale.set(k);
       ground.clear()
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).fill({ color: 0xf6e8d6, alpha: 0.35 })
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).stroke({ color: 0x403939, alpha: 0.25, width: 2 });
@@ -1023,15 +1063,16 @@
 
     function draw(e) {
       const up = held(e);
-      e.sprite.position.set(e.x, e.y - e.lift - (up ? 12 : 0));
+      e.sprite.position.set(e.x, e.y - e.lift - (up ? HELD_LIFT * unit() : 0));
       e.sprite.scale.set(e.dir * e.s, e.s);
       e.sprite.zIndex = up ? 1e9 : e.fixed ? -1e9 : e.y + e.z;   // scenery is always at the back
       if (e.shadow) {
         e.shadow.position.set(e.x, e.y);
         e.shadow.visible = e.sprite.visible;
+        e.shadow.alpha = clampTo(1 - e.lift / (120 * unit()), 0.35, 1);   // fainter the higher it is
       }
       if (e.tag) {
-        e.tag.position.set(e.x, e.y + 2);
+        e.tag.position.set(e.x, e.y - e.lift + 2);
         e.tag.visible = e.sprite.visible && !up;
       }
     }
@@ -1197,10 +1238,8 @@
                  act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5));
                } },
       wand:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3.5, () => relieve(cat, 'bored', 0.6)) },
-      tree:    { need: 'bored', solo: true, use: climb, spot: (cat, tree) => {
-                 cat.perch = pick(PERCHES);
-                 return tree.x + (cat.perch[0] - tree.def.look.foot.x) * tree.s;
-               } },
+      tree:    { need: 'bored', solo: true, use: climb, spot: perchSpot },
+      perch:   { need: 'bored', solo: true, use: climb, spot: perchSpot },
       ball:    { need: 'bored', chase: true, use: kick },
       mouse:   { need: 'bored', chase: true, use: pounce },
     };
@@ -1259,6 +1298,7 @@
       [5, cat => { const to = spotFor(cat); goTo(cat, to.x, to.y, () => act(cat, pick(['idle', 'sit']), rand(0.6, 1.8))); }],
       [3, cat => act(cat, pick(['idle', 'sit', 'sit']), rand(1.2, 3))],
       [2, sniff],
+      [cat => perchesFor(cat).length ? 2 : 0, cat => use(cat, pick(perchesFor(cat)))],
       [cat => 1 + cat.needs.bored * 3, zoomies],
       [cat => entities.some(c => c !== cat && free(c) && c.zone === cat.zone) ? 1.5 : 0, tag],
       [1, cat => act(cat, cat.def.anim.happy && Math.random() < 0.5 ? 'happy' : 'jump', 0.9)],
@@ -1314,6 +1354,7 @@
       }
       const item = nearest(cat, entities.filter(e => e.zone === cat.zone && USES[e.kind]?.need === need && usable(e, cat)), 0.5);
       if (item) use(cat, item);
+      else if (need === 'tired' && perchesFor(cat).length && Math.random() < 0.5) use(cat, pick(perchesFor(cat)));   // nap up high
       else if (need === 'tired') nap(cat);                       // no bed free: curl up on the floor
       else if (need === 'hunger' && (insist || Math.random() < 0.5)) {   // no food: beg by an empty bowl
         const bowl = nearest(cat, entities.filter(e => e.kind === 'bowl' && e.zone === cat.zone && !held(e)));
@@ -1357,15 +1398,29 @@
       act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; }, every(3, () => emote(home, '💤')));
     }
 
-    function climb(cat, tree) {
-      const height = (tree.def.look.foot.y - cat.perch[1]) * tree.s;
+    // Pick one of the item's perches; returns where on the floor to jump from.
+    function perchSpot(cat, item) {
+      cat.perch = pick(item.def.perches);
+      return item.x + (cat.perch[0] - item.def.look.foot.x) * item.s;
+    }
+    // Free things to climb near the cat.
+    const perchesFor = cat => entities.filter(e => e.zone === cat.zone && (e.kind === 'perch' || e.kind === 'tree') && usable(e, cat));
+
+    // Jump up onto a perch (cat tree, shelf, table), sit or nap up there,
+    // then jump down. A tired cat naps; a high spot is a cat's favourite.
+    function climb(cat, item) {
+      const height = (item.def.look.foot.y - cat.perch[1]) * item.s;
       const rise = speed => dt => { cat.lift = clampTo(cat.lift + speed * dt, 0, height); };
-      act(cat, 'jump', 0.5, () =>
+      const down = () => act(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
+      const sleepy = cat.needs.tired > URGENT;
+      act(cat, 'jump', 0.5, () => {
+        if (sleepy) return act(cat, 'sleep', rand(6, 10), () => { cat.needs.tired = 0; down(); });
         act(cat, 'sit', rand(4, 7), () => {
           relieve(cat, 'bored', 0.4);
           relieve(cat, 'tired', 0.2);
-          act(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
-        }), rise(height / 0.5));
+          down();
+        });
+      }, rise(height / 0.5));
     }
 
     function kick(cat, ball) {
@@ -1696,9 +1751,17 @@
         drag.e.x = p.x + drag.ox;
         drag.e.y = p.y + drag.oy;
         clamp(drag.e);
-        trashEl.classList.toggle('armed', isOver(trashEl, ev));
+        const binning = isOver(trashEl, ev);
+        trashEl.classList.toggle('armed', binning);
+        binning ? hideDrop() : markDrop(drag.e.x, drag.e.y, drag.e.half);
       } else {
         drag.ghost.style.transform = `translate(${ev.clientX - drag.gw / 2}px, ${ev.clientY - drag.gh}px)`;
+        if (!isOver(sceneEl, ev)) return hideDrop();
+        // Where it would land: the same spot spawn() will put it.
+        const p = toWorld(ev.clientX, ev.clientY), def = drag.def;
+        const half = (def.look.crop[2] * sizeOf(def)) / 2;
+        const at = stand({ half }, p.x, p.y, def.kind === 'cat' ? zoneAt(p) : 'room');
+        markDrop(at.x, at.y, half);
       }
     }
 
@@ -1712,6 +1775,7 @@
       removeEventListener('pointercancel', endDrag);
       document.body.classList.remove('dragging');
       trashEl.classList.remove('armed');
+      hideDrop();
       const { e, def, moved, ghost, homeX, homeY, homeZone } = drag;
       drag = null;
       ghost?.remove();
@@ -1947,12 +2011,37 @@
 
     // Show the chosen sky; with 'clock' this is re-run every minute.
     function updateSky(now = new Date()) {
-      const { src, stars } = currentSky(now);
+      const { src, stars, light } = currentSky(now);
       if (sceneEl.dataset.sky === src) return;
       sceneEl.dataset.sky = src;
       sceneEl.style.backgroundImage = src ? `url("${src}")` : 'none';
       document.getElementById('sky-pic').replaceChildren(skyThumb(src));
       setStars(stars);
+      setLight(light);
+    }
+
+    // The light through the windows for this sky: a faint beam from each
+    // sill and a brighter patch on the floor, brightest in the middle.
+    function setLight(light) {
+      windowLight.clear();
+      if (!light) return;
+      const [color, strength] = light;
+      const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      const centre = pts => [pts.reduce((n, p) => n + p[0], 0) / pts.length, pts.reduce((n, p) => n + p[1], 0) / pts.length];
+      for (const { sill, patch, stripes } of WINDOW_LIGHT) {
+        const [a, b, c, d] = patch;
+        windowLight.poly([...sill[0], ...sill[1], ...c, ...d]).fill({ color, alpha: strength * 0.35 });
+        if (stripes) {                                   // light between the slats
+          for (let i = 0; i < stripes; i++) {
+            const t0 = i / stripes, t1 = (i + 0.55) / stripes;
+            windowLight.poly([...mix(a, d, t0), ...mix(b, c, t0), ...mix(b, c, t1), ...mix(a, d, t1)]).fill({ color, alpha: strength });
+          }
+        } else {
+          const mid = centre(patch);
+          windowLight.poly(patch.flat()).fill({ color, alpha: strength })
+            .poly(patch.flatMap(p => mix(mid, p, 0.7))).fill({ color, alpha: strength * 0.6 });
+        }
+      }
     }
 
     // ------------------------------------------------------------------

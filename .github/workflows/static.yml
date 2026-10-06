@@ -38,7 +38,7 @@ jobs:
       - name: Collect the site
         run: |
           mkdir _site
-          cp -r index.html assets _site/
+          cp -r index.html site.webmanifest assets _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
