@@ -3,7 +3,8 @@
 A cozy pixel-art cat room that runs in the browser. Drag cats, food, toys,
 beds and furniture into an isometric room, put plants and bowls up on the
 tables and shelves, watch the cats get on with their day, and send them out
-to the play area. Click a cat to name it and tell it what to do. Each of the
+to the play area. Click a cat to name it, tell it what to do, or (for the
+cream cat) pick a mood: hide in a box, dance, flop over… Each of the
 15 room types comes furnished in its own colours, and the Photo button
 pauses everything and saves a picture of the room or the whole screen.
 
@@ -71,7 +72,11 @@ Install Pillow with `pip install pillow`.
 
 - **A cat:** add a folder under `assets/cats/` with `idle.png`, `run.png`,
   `sit.png`, `sleep.png`, `jump.png` and `attack.png` (strips of square
-  frames), then add a line to `CATS` in `index.html`.
+  frames), then add a line to `CATS` in `index.html`. A cat with more
+  animations gets more to do: with the mood ones (`box1`, `dance`,
+  `excited`, `surprised`, `tickle`, `crying`, `dead2`, `happy`, like the
+  cream cat) it gets a Moods section in its menu (see `MOODS`), and with
+  `idle2` it looks round now and then.
 - **An item:** add the picture under `assets/items/` and a line to `ITEMS`.
   Give big furniture `solid: true` so cats walk around it, and balls and the
   mouse bounce off it (tables are left open, because cats walk under them).
