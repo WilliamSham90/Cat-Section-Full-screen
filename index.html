@@ -461,6 +461,9 @@
     // Fixed scenery, not in the bar: the cat tree that makes the play area.
     // PlayGrounds/CatPlayGroundLighter.png is a paler version that also fits.
     const PLAY_TREE = cells('Play area', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2 })[0];
+    // …and a cushion bed at the other end, for cats out there to nap in.
+    const PLAY_BED = decor('Play area', { kind: 'bed', seat: 24 }, [['Play-area bed', [202, 138, 110, 82]]])[0];
+    const SCENERY = [PLAY_TREE, PLAY_BED];
 
     // Platform tops on the cat tree picture, in its pixels [x, y].
     const PERCHES = [[16, 40], [52, 52], [104, 24], [72, 84]];
@@ -719,7 +722,7 @@
     const art = {};                                     // url → loaded image, for drawing on canvases
 
     async function loadArt() {
-      const defs = [...CATALOG, PLAY_TREE];
+      const defs = [...CATALOG, ...SCENERY];
       const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
       const fxUrl = name => `effects/${name}.png`;
       const urls = [...new Set([...defs.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl), 'ui/bubble.png'])];
@@ -815,21 +818,29 @@
       }
       Object.assign(view, { k, x, y });
       Object.assign(yard, next);
-      document.documentElement.style.setProperty('--yard-strip', `${height - yard.y0 + 18}px`);
       room.position.set(x, y);
       room.scale.set(k);
       ground.clear()
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).fill({ color: 0xf6e8d6, alpha: 0.35 })
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).stroke({ color: 0x403939, alpha: 0.25, width: 2 });
       for (const e of entities) { fit(e); clamp(e); }
-      placeTree();
+      placeScenery();
       makeStars();
     }
 
-    const playTree = () => entities.find(e => e.def === PLAY_TREE);
-    function placeTree() {
-      const tree = playTree();
-      if (tree) Object.assign(tree, { x: yard.x0 + tree.half + 8, y: yard.y1 });
+    // The tree stands at the play area's left end, the bed at its right end.
+    // The signature (CSS) sits just above the strip, or above the bed if
+    // that's taller.
+    function placeScenery() {
+      let clear = app.screen.height - yard.y0 + 18;
+      for (const e of entities) {
+        if (e.def === PLAY_TREE) Object.assign(e, { x: yard.x0 + e.half + 8, y: yard.y1 });
+        if (e.def === PLAY_BED) {
+          Object.assign(e, { x: yard.x1 - e.half - 8, y: yard.y1 });
+          clear = Math.max(clear, app.screen.height - (e.y - e.tall) + 6);
+        }
+      }
+      document.documentElement.style.setProperty('--yard-strip', `${Math.round(clear)}px`);
     }
 
     // Where (x, y) lands for entity e in its area (or `zone`): on the room's
@@ -1969,8 +1980,8 @@
       for (const [name, fx, fy] of START) {
         spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
       }
-      spawn(PLAY_TREE, yard.x0, yard.y1, { zone: 'yard', fixed: true });
-      placeTree();
+      for (const def of SCENERY) spawn(def, yard.x0, yard.y1, { zone: 'yard', fixed: true });
+      placeScenery();
     }
 
     // Back to the starting room: default room type, starting cats and things.
