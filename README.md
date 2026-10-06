@@ -1,9 +1,11 @@
 # Cat Playground
 
 A cozy pixel-art cat room that runs in the browser. Drag cats, food, toys,
-beds and furniture into an isometric room, watch the cats get on with their
-day, and send them out to the play area. Click a cat to name it and tell it
-what to do.
+beds and furniture into an isometric room, put plants and bowls up on the
+tables and shelves, watch the cats get on with their day, and send them out
+to the play area. Click a cat to name it and tell it what to do. Each of the
+15 room types comes furnished in its own colours, and the Photo button
+pauses everything and saves a picture of the room or the whole screen.
 
 Made by [William Sham](https://williamsham90.github.io/Portfolio/).
 
@@ -39,6 +41,7 @@ assets/               everything the page loads
   audio/music/        background music                 ← made by tools/build_audio.py
   icons/              favicon and app icons            ← made by tools/build_icons.py
   vendor/pixi.min.js  PixiJS 8.22.0, the renderer
+  vendor/snapdom.mjs  SnapDOM 3.3.0 (MIT), draws the bar for whole-screen photos
 source/               originals that the tools turn into assets (not published)
   ui/                 cat-ui.png and pastel-ui.png sheets
   effects/            pixel effect GIFs
@@ -70,12 +73,17 @@ Install Pillow with `pip install pillow`.
   `sit.png`, `sleep.png`, `jump.png` and `attack.png` (strips of square
   frames), then add a line to `CATS` in `index.html`.
 - **An item:** add the picture under `assets/items/` and a line to `ITEMS`.
-  Give big furniture `solid: true` so cats walk around it (tables are left
-  open, because cats walk under them).
+  Give big furniture `solid: true` so cats walk around it, and balls and the
+  mouse bounce off it (tables are left open, because cats walk under them).
+  A table or shelf lists its `surfaces` (front, left and right corners and
+  height, in the picture's pixels) so small things can be put on it; see
+  `SHELF` and `TABLE`.
 - **A wall object:** add a line to `WALL_ITEMS` with `wall: 'left'` or
   `'right'`. A window also gets a `sill` (its bottom edge in picture
   pixels), which is where its light falls on the floor. In the app, click a
   wall object and move it with the arrow keys (Shift for bigger steps),
   remove it with Delete, or drag it to the trash.
+- **A room's furniture:** each line of `ROOM_TYPES` names one of the
+  `ARRANGEMENTS` (where things go) and the colours to use for it.
 - **A song:** put the original in `source/music/`, add it to `MUSIC` in
   `tools/build_audio.py` and to `SONGS` in `index.html`, then run the tool.

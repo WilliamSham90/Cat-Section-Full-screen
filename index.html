@@ -280,8 +280,8 @@
     }
     .cat-actions img { height: 26px; width: auto; }
 
-    /* ---- Sound menu (a popover under the Sound button) ---- */
-    .sound-menu {
+    /* ---- Menus that open under a tool: Sound and Photo ---- */
+    .tool-menu {
       position: fixed;
       inset: auto;
       margin: 0;
@@ -289,8 +289,8 @@
       padding: 0 8px 6px;
       overflow: visible;
     }
-    .sound-menu h2 { margin: 0 0 8px; font-size: 20px; text-align: center; }
-    .sound-menu h3 { margin: 0; font-size: 16px; }
+    .tool-menu h2 { margin: 0 0 8px; font-size: 20px; text-align: center; }
+    .tool-menu h3 { margin: 0; font-size: 16px; }
     .sound-part + .sound-part { margin-top: 12px; padding-top: 10px; border-top: 2px dashed var(--sand); }
     .sound-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .switch { min-width: 64px; height: 36px; padding: 0; font-weight: 600; }
@@ -309,6 +309,43 @@
     .volume { display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .volume input { flex: 1; accent-color: var(--cocoa); }
     #sound-button[data-music="off"] .waves { opacity: .25; }
+
+    /* ---- Photo menu ---- */
+    .note { margin: 0; font-size: 13px; color: var(--muted); }
+    .shots { display: grid; gap: 4px; margin-top: 6px; }
+    .shots button { display: grid; gap: 0; padding: 0 6px; text-align: left; cursor: pointer; }
+    .shots button span { font-size: 12px; color: var(--muted); }
+    .shots button:disabled { cursor: progress; opacity: .6; }
+    .photo { width: min(640px, calc(100vw - 24px)); }
+    .photo h2 { margin: 0 0 10px; font-size: 20px; }
+    .photo img {
+      display: block;
+      width: 100%;
+      max-height: 55dvh;
+      object-fit: contain;
+      margin-bottom: 12px;
+      border: 2px solid var(--ink);
+      border-radius: 4px;
+      background: var(--bg);
+    }
+    a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+    /* The flash when a photo is taken. */
+    .flash { position: fixed; inset: 0; z-index: 20; background: #fff; pointer-events: none; animation: flash .35s ease-out forwards; }
+    @keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+    /* Shown while everything is paused; tapping it carries on. */
+    .paused {
+      position: absolute;
+      left: max(12px, env(safe-area-inset-left));
+      top: 10px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .paused[hidden] { display: none; }
 
     /* ---- Hint shown while a wall object is selected ---- */
     .wall-hint {
@@ -367,6 +404,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       #scene, .trash { transition: none; }
+      .flash { display: none; }
     }
   </style>
 </head>
@@ -389,6 +427,13 @@
         </svg>
         Sound
       </button>
+      <button type="button" class="tool tile" id="photo-button" title="Take a photo, or pause everything" popovertarget="photo-menu">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>
+        </svg>
+        Photo
+      </button>
       <button type="button" class="tool tile" id="reset" title="Put the room back the way it started">
         <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -410,6 +455,10 @@
       <span class="keys">← → ↑ ↓ move it along the wall · Delete removes it · Esc when done</span>
       <span class="touch">Drag it along the wall · drop it on the trash to remove it</span>
     </p>
+    <button type="button" id="paused" class="paused tile" hidden aria-keyshortcuts="P">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+      Paused · tap to carry on
+    </button>
   </main>
   <a class="signature nameplate" href="https://williamsham90.github.io/Portfolio/" target="_blank" rel="noopener">
     <span>Made by</span> <span class="name">William Sham</span><span class="visually-hidden"> (portfolio, opens in a new tab)</span>
@@ -426,7 +475,7 @@
   </div>
 
   <!-- Opens under the Sound button. Music and cat sounds are switched separately. -->
-  <div id="sound-menu" class="sound-menu panel" popover aria-labelledby="sound-title">
+  <div id="sound-menu" class="tool-menu panel" popover aria-labelledby="sound-title">
     <h2 id="sound-title">Sound</h2>
     <section class="sound-part" aria-labelledby="music-title">
       <div class="sound-row">
@@ -446,6 +495,38 @@
       <label class="volume">Volume <input type="range" id="cats-volume" min="0" max="100" step="1"></label>
     </section>
   </div>
+
+  <!-- Opens under the Photo button. -->
+  <div id="photo-menu" class="tool-menu panel" popover aria-labelledby="photo-title">
+    <h2 id="photo-title">Photo</h2>
+    <section class="sound-part" aria-labelledby="pause-title">
+      <div class="sound-row">
+        <h3 id="pause-title">Pause everything</h3>
+        <button type="button" class="tile switch" id="pause-toggle" aria-pressed="false" aria-keyshortcuts="P">Off</button>
+      </div>
+      <p class="note">Cats and toys hold still while you set up the shot. You can still move things. Key: P</p>
+    </section>
+    <section class="sound-part" aria-labelledby="shots-title">
+      <h3 id="shots-title">Take a photo of…</h3>
+      <div class="shots">
+        <button type="button" class="tile" data-shot="room">The room <span>just the room and what's in it</span></button>
+        <button type="button" class="tile" data-shot="scene">Room and play area <span>everything under the bar</span></button>
+        <button type="button" class="tile" data-shot="screen">Whole screen <span>the bar and buttons too</span></button>
+      </div>
+    </section>
+  </div>
+
+  <dialog id="photo" class="photo panel" aria-labelledby="photo-heading">
+    <form method="dialog">
+      <h2 id="photo-heading">Your photo</h2>
+      <img id="photo-img" alt="The photo you just took">
+      <div class="actions">
+        <button value="" class="btn">Close</button>
+        <button type="button" id="photo-share" class="btn" hidden>Share</button>
+        <a id="photo-save" class="btn dark" download>Save</a>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="confirm" class="panel" aria-labelledby="confirm-text">
     <form method="dialog">
@@ -511,6 +592,23 @@
     const DECOR = ITEM + 'decor/room-decorations.png';
     const decor = (group, props, list) => list.map(([name, frame]) => ({ group, name, src: DECOR, frame, scale: 2, ...props }));
 
+    // Mapped-out tables and shelves, in the picture's pixels (every colour
+    // of one shares the same shape). Each surface is a flat iso
+    // parallelogram given by its front, left and right corners, and `h`
+    // high off the floor; the first one is the top, where cats sit.
+    // `base` is the same for the floor it stands on (see footprint).
+    const level = (y, h) => ({ front: [47, y], left: [21, y - 13], right: [84, y - 20], h });
+    const SHELF = {
+      surfaces: [level(43, 84), level(70, 57), level(98, 29), level(119, 8)],
+      base: { front: [47, 127], left: [1, 104], right: [99, 99] },
+    };
+    const TABLE = {
+      surfaces: [{ front: [30, 36], left: [2, 18], right: [58, 18], h: 25 }],
+      base: { front: [30, 61], left: [1, 44], right: [60, 44] },
+    };
+    // Small things that can go on a table or shelf.
+    const SMALL = new Set(['bowl', 'fish', 'bag', 'ball', 'wand', 'decor']);
+
     const ITEMS = [
       ...cells('Food', 'food/bowls.png', 2, 16, ['Green bowl', 'Blue bowl', 'Purple bowl', 'Red bowl'], { kind: 'bowl', scale: 3 }),
       ...cells('Food', 'food/fish.png', 2, 16, ['Blue fish', 'Orange fish', 'Silver fish', 'Yellow fish'], { kind: 'fish', scale: 3 }),
@@ -545,15 +643,15 @@
         ['Cream pot plant', [132, 226, 23, 29]], ['Mint pot plant', [164, 226, 23, 29]],
         ['Yellow pot plant', [132, 258, 23, 29]], ['Blue pot plant', [164, 258, 23, 29]],
       ]),
-      // Shelves and tables: cats jump up on them. `perches` are the spots
-      // they sit on, in the picture's pixels [x, y]. Cats walk round
-      // shelves (`solid`) but straight under tables.
-      ...decor('Decor', { kind: 'perch', perches: [[52, 26]], solid: true }, [
+      // Shelves and tables: cats jump up on top, and small things can be
+      // put on them (see SHELF and TABLE). Cats walk round shelves
+      // (`solid`) but straight under tables.
+      ...decor('Decor', { kind: 'perch', ...SHELF, solid: true }, [
         ['Peach shelf', [14, 289, 100, 127]], ['Blue shelf', [12, 416, 100, 128]],
         ['Green shelf', [9, 544, 100, 128]], ['Purple shelf', [7, 673, 100, 127]],
         ['Wooden shelf', [7, 801, 100, 127]],
       ]),
-      ...decor('Decor', { kind: 'perch', perches: [[30, 20]] }, [
+      ...decor('Decor', { kind: 'perch', ...TABLE }, [
         ['Cream table', [674, 610, 61, 61]], ['Grey table', [738, 610, 61, 61]],
         ['Pink table', [802, 610, 61, 61]], ['Teal table', [866, 610, 61, 61]],
         ['Lilac table', [930, 610, 61, 61]],
@@ -603,16 +701,111 @@
     // …and a cushion bed at the other end, for cats out there to nap in.
     const PLAY_BED = decor('Play area', { kind: 'bed', seat: 24 }, [['Play-area bed', [202, 138, 110, 82]]])[0];
     const SCENERY = [PLAY_TREE, PLAY_BED];
+    // Toys out there at first: name and how far along the strip, past the tree.
+    const YARD_TOYS = [['Orange ball', 0.08], ['Pink ball', 0.2]];
 
 
     // ------------------------------------------------------------------
     // Room – one of the isometric room pictures, given a wooden floor. The
-    // room types differ in wall colour; what hangs on the walls is up to you.
+    // room types differ in wall colour, and each comes furnished to match:
+    // one of the ARRANGEMENTS below, in its own colours.
     // ------------------------------------------------------------------
-    const ROOM_TYPES = ['Rose', 'Slate', 'Honey', 'Lilac', 'Sage', 'Teal', 'Pistachio', 'Stone',
-      'Plum', 'Cocoa', 'Cloud', 'Sky', 'Periwinkle', 'Mint', 'Coral']
-      .map((name, i) => ({ name, src: `assets/rooms/room-${String(i + 1).padStart(2, '0')}.png` }));
+    // A room's colours: the colour names of its things (see ITEMS and WALL_ITEMS).
+    const theme = (shelf, table, bed, home, post, figs, plants, bowl, ball, fish, curtains, window, hearts, portraits) =>
+      ({ shelf, table, bed, home, post, figs, plants, bowl, ball, fish, curtains, window, hearts, portraits });
+    const ROOM_TYPES = [
+      ['Rose', 'cozy', theme('Purple', 'Cream', 'Blue bed', 'Purple carrier', 'Green scratcher', ['blue', 'brown'], ['Pink', 'Cream'],
+        'Blue', 'Blue', 'Blue', 'blue', 'Window, lilac blinds', ['yellow', 'purple', 'pink'], ['cream', 'lilac'])],
+      ['Slate', 'nook', theme('Blue', 'Grey', 'Grey cushion', 'Blue house', 'Slate scratching post', ['navy', 'blue'], ['Blue', 'Grey'],
+        'Blue', 'Blue', 'Silver', 'blue', 'Grey window', ['blue', 'grey', 'white'], ['blue', 'white'])],
+      ['Honey', 'play', theme('Wooden', 'Cream', 'Brown bed', 'Orange carrier', 'Peach scratching post', ['brown', 'pink'], ['Yellow', 'Cream'],
+        'Red', 'Orange', 'Yellow', 'peach', 'Cream window', ['yellow', 'brown', 'olive'], ['cream', 'snow'])],
+      ['Lilac', 'cozy', theme('Purple', 'Lilac', 'Purple bed', 'Purple carrier', 'Purple scratcher', ['pink', 'blue'], ['Pink', 'Blue'],
+        'Purple', 'Pink', 'Silver', 'blue', 'Window, lilac blinds', ['purple', 'pink', 'white'], ['lilac', 'white'])],
+      ['Sage', 'nook', theme('Green', 'Teal', 'Olive cushion', 'Green house', 'Olive scratching post', ['brown', 'navy'], ['Mint', 'Cream'],
+        'Green', 'Orange', 'Yellow', 'peach', 'Brown window', ['olive', 'green', 'brown'], ['teal', 'cream'])],
+      ['Teal', 'play', theme('Blue', 'Teal', 'Teal cushion', 'Blue carrier', 'Blue scratcher', ['blue', 'navy'], ['Mint', 'Blue'],
+        'Blue', 'Blue', 'Blue', 'blue', 'Window, teal blinds', ['green', 'blue', 'white'], ['teal', 'snow'])],
+      ['Pistachio', 'cozy', theme('Green', 'Cream', 'Green bed', 'Green carrier', 'Green scratcher', ['pink', 'brown'], ['Mint', 'Yellow'],
+        'Green', 'Orange', 'Yellow', 'peach', 'Window, white blinds', ['green', 'olive', 'yellow'], ['cream', 'teal'])],
+      ['Stone', 'nook', theme('Wooden', 'Grey', 'Grey cushion', 'Blue house', 'Slate scratching post', ['navy', 'brown'], ['Grey', 'Cream'],
+        'Blue', 'Pink', 'Silver', 'blue', 'Grey window', ['grey', 'white', 'blue'], ['white', 'snow'])],
+      ['Plum', 'play', theme('Purple', 'Lilac', 'Purple cushion', 'Black carrier', 'Purple scratcher', ['pink', 'navy'], ['Pink', 'Blue'],
+        'Purple', 'Pink', 'Orange', 'red', 'Mauve window', ['purple', 'pink', 'brown'], ['lilac', 'white'])],
+      ['Cocoa', 'cozy', theme('Wooden', 'Cream', 'Brown bed', 'Brown carrier', 'Red scratcher', ['brown', 'pink'], ['Yellow', 'Cream'],
+        'Red', 'Orange', 'Orange', 'red', 'Window, black blinds', ['brown', 'olive', 'yellow'], ['cream', 'snow'])],
+      ['Cloud', 'nook', theme('Blue', 'Cream', 'Blue cushion', 'Blue house', 'Slate scratching post', ['blue', 'navy'], ['Cream', 'Blue'],
+        'Blue', 'Blue', 'Silver', 'blue', 'Cream window', ['white', 'blue', 'grey'], ['snow', 'white'])],
+      ['Sky', 'play', theme('Blue', 'Cream', 'Blue cushion', 'Navy carrier', 'Blue scratcher', ['blue', 'navy'], ['Blue', 'Yellow'],
+        'Blue', 'Orange', 'Yellow', 'blue', 'Window, white blinds', ['blue', 'white', 'yellow'], ['blue', 'snow'])],
+      ['Periwinkle', 'cozy', theme('Purple', 'Lilac', 'Blue bed', 'Navy carrier', 'Purple scratcher', ['navy', 'blue'], ['Blue', 'Pink'],
+        'Purple', 'Blue', 'Blue', 'blue', 'Window, lilac blinds', ['purple', 'blue', 'white'], ['lilac', 'blue'])],
+      ['Mint', 'nook', theme('Green', 'Teal', 'Teal cushion', 'Green house', 'Olive scratching post', ['pink', 'blue'], ['Mint', 'Pink'],
+        'Green', 'Pink', 'Blue', 'peach', 'Window, teal blinds', ['green', 'white', 'pink'], ['teal', 'cream'])],
+      ['Coral', 'play', theme('Peach', 'Pink', 'Red cushion', 'Orange carrier', 'Red scratcher', ['pink', 'brown'], ['Pink', 'Yellow'],
+        'Red', 'Pink', 'Orange', 'red', 'Window, white blinds', ['pink', 'brown', 'yellow'], ['cream', 'lilac'])],
+    ].map(([name, look, colours], i) => ({ name, look, colours, src: `assets/rooms/room-${String(i + 1).padStart(2, '0')}.png` }));
     const DEFAULT_ROOM = 0;
+
+    // Where things go in each arrangement, given a room's colours `c`.
+    // cat: where Coco starts. floor: name and where its feet go, as
+    // fractions of the floor's width (left → right) and depth (back →
+    // front). up: things on a table or shelf: name, the name of what it's
+    // on (from `floor`), the level (0 = top) and the spot [u, v] (see Surfaces).
+    // walls: name and top-left corner in picture pixels.
+    const ARRANGEMENTS = {
+      // The room as William laid it out.
+      cozy: c => ({
+        cat: [0.095, 0.51],
+        floor: [
+          [`${c.bowl} bowl`, 0.027, 0.513], ['Feather wand', 0.159, 0.597], [c.bed, 0.319, 0.288], [`${c.shelf} shelf`, 0.472, 0.24],
+          [`Fig in a ${c.figs[0]} pot`, 0.655, 0.219], [`Fig in a ${c.figs[1]} pot`, 0.938, 0.547], [c.home, 0.803, 0.476],
+          [`${c.table} table`, 0.422, 0.623], [c.post, 0.495, 0.911], [`${c.ball} ball`, 0.638, 0.387],
+        ],
+        up: [],
+        walls: [
+          [`Window, ${c.curtains} curtains`, 32, 129], ['Painting', 214, 50], [`Heart frame, ${c.hearts[0]}`, 185, 97],
+          [`Heart frame, ${c.hearts[1]}`, 159, 142], [`Heart frame, ${c.hearts[2]}`, 136, 186], [`Cat portrait, ${c.portraits[0]}`, 281, 66],
+          ['Plant poster', 341, 122], [c.window, 387, 131],
+        ],
+      }),
+      // A shelf of plants along the left wall, a table by the window.
+      // (The shelf would hide a window on the left wall, so it's on the right.)
+      nook: c => ({
+        cat: [0.45, 0.58],
+        floor: [
+          [`${c.shelf} shelf`, 0.27, 0.38], [`Fig in a ${c.figs[0]} pot`, 0.5, 0.08], [c.post, 0.66, 0.2],
+          [c.home, 0.87, 0.44], [`${c.table} table`, 0.64, 0.64], [c.bed, 0.3, 0.82], [`Fig in a ${c.figs[1]} pot`, 0.07, 0.56],
+          [`${c.bowl} bowl`, 0.5, 0.84], [`${c.ball} ball`, 0.8, 0.72],
+        ],
+        up: [
+          [`${c.plants[0]} pot plant`, `${c.shelf} shelf`, 0, [0.35, 0.65]], [`${c.plants[1]} pot plant`, `${c.shelf} shelf`, 1, [0.25, 0.3]],
+          [`${c.fish} fish`, `${c.shelf} shelf`, 2, [0.3, 0.25]], [`${c.plants[0]} pot plant`, `${c.table} table`, 0, [0.7, 0.3]],
+        ],
+        walls: [
+          ['Painting', 44, 150], [`Heart frame, ${c.hearts[0]}`, 182, 100], [`Heart frame, ${c.hearts[1]}`, 210, 86],
+          [c.window, 300, 104], [`Cat portrait, ${c.portraits[0]}`, 390, 140], [`Cat portrait, ${c.portraits[1]}`, 425, 158],
+        ],
+      }),
+      // Room to run: toys out, furniture round the edges.
+      play: c => ({
+        cat: [0.5, 0.55],
+        floor: [
+          [c.home, 0.2, 0.38], [c.post, 0.47, 0.1], [`${c.shelf} shelf`, 0.8, 0.4], [`Fig in a ${c.figs[0]} pot`, 0.64, 0.14],
+          [`${c.table} table`, 0.3, 0.74], [c.bed, 0.72, 0.76], [`${c.bowl} bowl`, 0.5, 0.88], [`${c.ball} ball`, 0.55, 0.45],
+          ['Feather wand', 0.4, 0.3], ['Toy mouse', 0.6, 0.62], [`Fig in a ${c.figs[1]} pot`, 0.95, 0.56],
+        ],
+        up: [
+          [`${c.plants[0]} pot plant`, `${c.shelf} shelf`, 0, [0.6, 0.3]], [`${c.fish} fish`, `${c.shelf} shelf`, 0, [0.25, 0.6]],
+          [`${c.plants[1]} pot plant`, `${c.shelf} shelf`, 3, [0.2, 0.5]], [`${c.fish} fish`, `${c.table} table`, 0, [0.5, 0.5]],
+        ],
+        walls: [
+          ['Air vent', 60, 200], [`Window, ${c.curtains} curtains`, 110, 98], [`Heart frame, ${c.hearts[0]}`, 222, 60],
+          [`Cat portrait, ${c.portraits[0]}`, 290, 80], [c.window, 340, 112], [`Heart frame, ${c.hearts[1]}`, 420, 166],
+          [`Heart frame, ${c.hearts[2]}`, 446, 180],
+        ],
+      }),
+    };
 
     // All room pictures share this layout, in picture pixels.
     const ROOM = {
@@ -628,11 +821,6 @@
       left: { x0: 32, x1: 252, slope: -0.535, top: x => 162 - 0.535 * (x - 30), base: x => 318 - 0.535 * (x - 39), into: [2, 1] },
       right: { x0: 262, x1: 488, slope: 0.535, top: x => 43 + 0.535 * (x - 262), base: x => 201 + 0.535 * (x - 262), into: [-2, 1] },
     };
-    // What hangs on the walls at first: name and top-left corner in picture pixels.
-    const START_WALL = [
-      ['Window, peach curtains', 70, 140], ['Painting', 170, 140], ['Window, lilac blinds', 285, 95],
-      ['Plant poster', 375, 140], ['Cat portrait, cream', 430, 175],
-    ];
 
     // Floorboards, in picture pixels: plank colours (picked per board), the
     // gap between boards, and how wide and long the boards are.
@@ -670,14 +858,6 @@
     // Pop-ups shown as a pixel effect; any other emoji floats up as text.
     const EMOTE_EFFECT = { '❤️': 'hearts', '✨': 'sparkle', '💤': 'sleep', '💨': 'smoke', '❗': 'alert',
                            '💢': 'scrap', '😋': 'music' };
-
-    // What the room looks like at first. Positions are fractions of the
-    // floor's width (left → right) and depth (back → front).
-    const START = [
-      ['Cream cat', .5, .55], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
-      ['Blue ball', .42, .72], ['Green scratcher', .6, .3], ['Toy mouse', .3, .62],
-      ['Fig in a brown pot', .47, .12], ['Cream table', .18, .58],
-    ];
 
     // ------------------------------------------------------------------
     // Helpers
@@ -1091,6 +1271,7 @@
       entities.splice(entities.indexOf(e), 1);
       if (e.kind === 'cat') settle(e);
       else if (e.user) think(e.user);            // whoever was using it finds something else to do
+      for (const o of entities) if (o.on === e) unseat(o);   // what was on it comes down
       if (!quiet) emote(e, '💨');
       if (e === menuCat) catMenu.hidePopover();
       unlink(e);
@@ -1121,14 +1302,17 @@
       return at;
     }
 
+    // Things on a table or shelf are drawn just in front of it (furniture
+    // is drawn first, see the ticker), the ones further back behind.
     function draw(e) {
       const up = held(e);
       e.sprite.position.set(e.x, e.y - e.lift - (up ? HELD_LIFT * unit() : 0));
       e.sprite.scale.set(e.dir * e.s, e.s);
-      e.sprite.zIndex = up ? 1e9 : e.fixed ? -1e9 : e.y + e.z;   // scenery is always at the back
+      e.sprite.zIndex = up ? 1e9 : e.fixed ? -1e9                            // scenery is always at the back
+        : e.on ? e.on.sprite.zIndex + 0.5 + (e.y - e.on.y) * 1e-3 - e.spot.level * 1e-5 : e.y + e.z;
       if (e.shadow) {
         e.shadow.position.set(e.x, e.y);
-        e.shadow.visible = e.sprite.visible;
+        e.shadow.visible = e.sprite.visible && !e.on;       // it would be under the furniture
         e.shadow.alpha = clampTo(1 - e.lift / (120 * unit()), 0.35, 1);   // fainter the higher it is
       }
       if (e.tag) {
@@ -1290,23 +1474,24 @@
     const USES = {
       bowl:    { need: 'hunger', solo: true, ok: b => b.food > 0, use: eat },
       fish:    { need: 'hunger', solo: true, use: eat },
-      bed:     { need: 'tired', solo: true, spot: (cat, bed) => bed.x,
+      bed:     { need: 'tired', solo: true, spot: (cat, bed) => ({ x: bed.x, y: bed.y + 1 }),
                  use: (cat, bed) => { cat.lift = bed.def.seat * bed.s; cat.z = 1; nap(cat); } },
-      hideout: { need: 'tired', solo: true, spot: (cat, home) => home.x, use: hide },
+      hideout: { need: 'tired', solo: true, spot: (cat, home) => ({ x: home.x, y: home.y + 1 }), use: hide },
       post:    { need: 'bored', solo: true, use: cat => {
                  playSound('scratch', { rate: cat.voice, length: 2.8 });
                  act(cat, 'attack', 3, () => relieve(cat, 'bored', 0.5));
                } },
       wand:    { need: 'bored', solo: true, use: cat => act(cat, 'attack', 3.5, () => relieve(cat, 'bored', 0.6)) },
       tree:    { need: 'bored', solo: true, use: climb, spot: perchSpot },
-      perch:   { need: 'bored', solo: true, use: climb, spot: perchSpot },
+      perch:   { need: 'bored', solo: true, use: climb, spot: perchSpot, ok: (perch, cat) => !cat || !!topSpot(cat, perch) },
       ball:    { need: 'bored', chase: true, use: kick },
       mouse:   { need: 'bored', chase: true, use: pounce },
     };
 
     function usable(item, cat) {
       const how = USES[item.kind];
-      return !!how && !held(item) && !item.dying && !(how.solo && item.user && item.user !== cat) && (how.ok?.(item) ?? true);
+      return !!how && !held(item) && !item.dying && reachable(item, cat) && !(how.solo && item.user && item.user !== cat) &&
+        (how.ok?.(item, cat) ?? true);
     }
     // Awake, on the floor and not tied up with an object.
     const free = c => c.kind === 'cat' && !held(c) && c.sprite.visible && c.anim !== 'sleep' && !c.using;
@@ -1337,6 +1522,7 @@
     // Run to (x, y), or after `follow` if given, then do `next`. `rush`
     // scales the cat's speed (zoomies, chasing).
     function goTo(cat, x, y, next = null, follow = null, rush = 1) {
+      if (cat.on) return hopDown(cat, () => goTo(cat, x, y, next, follow, rush));   // down off the furniture first
       const to = clearSpot(cat, stand(cat, x, y));
       Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y, reroute: 0.5 });
       cat.route = route(cat, follow ? follow.x : to.x, follow ? follow.y : to.y);
@@ -1344,10 +1530,13 @@
     }
 
     // Let go of whatever the cat was doing.
+    // A cat up on furniture stays there (think() jumps it down).
     function settle(cat) {
       if (cat.using) cat.using.user = null;
       cat.using = cat.follow = cat.next = cat.tick = null;
-      cat.lift = cat.z = 0;
+      land(cat);                                     // a jump cut short ends where it was going
+      if (!cat.on) cat.lift = 0;
+      cat.z = 0;
       if (!cat.sprite.visible) {                     // step out of a hideaway
         cat.sprite.visible = true;
         cat.y += 8 * unit();
@@ -1357,6 +1546,7 @@
 
     function think(cat) {
       settle(cat);
+      if (cat.on) return hopDown(cat, () => think(cat));
       const urgent = Object.keys(cat.needs).filter(k => cat.needs[k] > URGENT)
         .sort((a, b) => cat.needs[b] - cat.needs[a]);
       for (const need of urgent) if (pursue(cat, need)) return;
@@ -1437,10 +1627,29 @@
     function use(cat, item) {
       settle(cat);
       const how = USES[item.kind];
+      if (item.on) return useUpHigh(cat, item, how);
       if (how.solo) { item.user = cat; cat.using = item; }
       if (how.chase) return goTo(cat, item.x, item.y, () => how.use(cat, item), item, 1.25);
-      const x = how.spot ? how.spot(cat, item) : besideX(cat, item);
-      goTo(cat, x, item.y + 1, () => { face(cat, item); how.use(cat, item); });
+      const at = how.spot ? how.spot(cat, item) : { x: besideX(cat, item), y: item.y + 1 };
+      goTo(cat, at.x, at.y, () => { face(cat, item); how.use(cat, item); });
+    }
+
+    // Something on a table or shelf: from the floor if it's on a bottom
+    // shelf, otherwise jump up next to it (and down again after, see think).
+    function useUpHigh(cat, item, how) {
+      const furn = item.on;
+      if (item.spot.level > 0) {
+        const at = landingSpot(cat, furn, item.x, item.y);
+        if (how.solo) { item.user = cat; cat.using = item; }
+        return goTo(cat, at.x, at.y, () => { face(cat, item); how.use(cat, item); });
+      }
+      const spot = spotNear(furn, 0, item.spot.u, item.spot.v, roomFor(cat, furn), cat);
+      if (!spot) { say(cat, 'Mrrp?'); return act(cat, 'sit', 1.5); }      // no room up there
+      const from = surfacePoint(furn, 0, spot.u, spot.v), at = landingSpot(cat, furn, from.x, from.y + from.h);
+      if (how.solo) { item.user = cat; cat.using = item; }
+      goTo(cat, at.x, at.y, () => hopUp(cat, furn, spot, () => {
+        if (!item.dead && item.on === furn) { face(cat, item); how.use(cat, item); }
+      }));
     }
 
     function eat(cat, food) {
@@ -1468,10 +1677,20 @@
       act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; }, every(3, () => emote(home, '💤')));
     }
 
-    // Pick one of the item's perches; returns where on the floor to jump from.
+    // A free spot for the cat on top of a table or shelf, or null.
+    const topSpot = (cat, furn) => !furn.def.surfaces ||
+      spotNear(furn, 0, rand(0.3, 0.7), rand(0.3, 0.7), roomFor(cat, furn), cat);
+
+    // Where to jump up from. The cat tree has fixed perches; tables and
+    // shelves have a free spot on top.
     function perchSpot(cat, item) {
-      cat.perch = pick(item.def.perches);
-      return item.x + (cat.perch[0] - item.def.look.foot.x) * item.s;
+      if (!item.def.surfaces) {
+        cat.perch = pick(item.def.perches);
+        return { x: item.x + (cat.perch[0] - item.def.look.foot.x) * item.s, y: item.y + 1 };
+      }
+      cat.perch = topSpot(cat, item);
+      const p = cat.perch ? surfacePoint(item, 0, cat.perch.u, cat.perch.v) : { x: item.x, y: item.y, h: 0 };
+      return landingSpot(cat, item, p.x, p.y + p.h);
     }
     // Free things to climb near the cat.
     const perchesFor = cat => entities.filter(e => e.zone === cat.zone && (e.kind === 'perch' || e.kind === 'tree') && usable(e, cat));
@@ -1479,10 +1698,18 @@
     // Jump up onto a perch (cat tree, shelf, table), sit or nap up there,
     // then jump down. A tired cat naps; a high spot is a cat's favourite.
     function climb(cat, item) {
+      const sleepy = cat.needs.tired > URGENT;
+      if (item.def.surfaces) {
+        const spot = cat.perch && freeAt(item, 0, cat.perch.u, cat.perch.v, roomFor(cat, item), cat) ? cat.perch : topSpot(cat, item);
+        if (!spot) return act(cat, 'sit', 1);              // someone took the spot
+        return hopUp(cat, item, spot, () => {
+          if (sleepy) return act(cat, 'sleep', rand(6, 10), () => { cat.needs.tired = 0; });
+          act(cat, 'sit', rand(4, 7), () => { relieve(cat, 'bored', 0.4); relieve(cat, 'tired', 0.2); });
+        });
+      }
       const height = (item.def.look.foot.y - cat.perch[1]) * item.s;
       const rise = speed => dt => { cat.lift = clampTo(cat.lift + speed * dt, 0, height); };
       const down = () => actOnce(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
-      const sleepy = cat.needs.tired > URGENT;
       actOnce(cat, 'jump', 0.5, () => {
         if (sleepy) return act(cat, 'sleep', rand(6, 10), () => { cat.needs.tired = 0; down(); });
         act(cat, 'sit', rand(4, 7), () => {
@@ -1496,6 +1723,11 @@
     function kick(cat, ball) {
       face(cat, ball);
       if (held(ball)) return actOnce(cat, 'jump', 1);      // swat at the ball you're dangling
+      if (ball.on) {                                       // knocked off the table
+        unseat(ball, Math.sign(ball.x - cat.x || 1) * rand(80, 160) * unit(), rand(120, 200) * unit());
+        relieve(cat, 'bored', 0.3);
+        return act(cat, 'attack', 0.6);
+      }
       const a = Math.atan2(ball.y - cat.y, ball.x - cat.x) + rand(-0.6, 0.6);
       const v = rand(350, 600) * unit();
       ball.vx = Math.cos(a) * v;
@@ -1649,19 +1881,17 @@
     const cellOf = v => clampTo(Math.floor((v + 1) / CELL), 0, GRID - 1);
     const cellMid = i => -1 + (i + 0.5) * CELL;
 
-    // Cells this cat can't walk through. Each solid thing stands on an iso
-    // diamond just behind its feet, which is a square in floor coordinates;
-    // it's grown by the cat's own size. What the cat is heading for doesn't count.
+    // Cells this cat can't walk through: every solid thing's footprint,
+    // grown by the cat's own size. What the cat is heading for doesn't count.
     function blockedFor(cat) {
       const f = floorBox(), grid = new Uint8Array(GRID * GRID);
       const pad = (cat.half * 0.5) / f.rx;
-      for (const e of entities) {
-        if (!e.def.solid || e.zone !== 'room' || e === cat.using || held(e)) continue;
-        const r = (e.half * 0.8) / f.rx + pad;
-        const [p, q] = toFloor(f, e.x, e.y - e.half * 0.4);
-        for (let i = cellOf(p - r); i <= cellOf(p + r); i++) {
-          for (let j = cellOf(q - r); j <= cellOf(q + r); j++) {
-            if (Math.abs(cellMid(i) - p) <= r && Math.abs(cellMid(j) - q) <= r) grid[i * GRID + j] = 1;
+      for (const e of solids(cat.using)) {
+        const [p0, p1, q0, q1] = footprint(e, f).map((v, i) => v + (i % 2 ? pad : -pad));
+        for (let i = cellOf(p0); i <= cellOf(p1); i++) {
+          for (let j = cellOf(q0); j <= cellOf(q1); j++) {
+            const p = cellMid(i), q = cellMid(j);
+            if (p >= p0 && p <= p1 && q >= q0 && q <= q1) grid[i * GRID + j] = 1;
           }
         }
       }
@@ -1790,20 +2020,269 @@
     }
 
     // ------------------------------------------------------------------
+    // Footprints – the patch of floor a piece of furniture stands on, as a
+    // box [p0, p1, q0, q1] in floor coordinates. A shelf's or table's base
+    // lines up with the walls, so its box is exact; anything else gets a
+    // square just behind its feet. A gap to a wall too narrow for a cat is
+    // filled in, so nothing gets lost behind furniture in a corner. Cats
+    // plan their way round solid things (blockedFor), balls and the mouse
+    // bounce off them, and anything put down inside one is pushed out.
+    // ------------------------------------------------------------------
+    const WALL_GAP = 0.2;                                 // floor units; the floor is 2 across
+
+    // Screen point of a point in e's picture pixels.
+    const pointOf = (e, [px, py]) => [e.x + (px - e.def.look.foot.x) * e.s, e.y + (py - e.def.look.foot.y) * e.s];
+
+    function footprint(e, f = floorBox()) {
+      let box;
+      const b = e.def.base;
+      if (b) {
+        const [F, L, R] = [b.front, b.left, b.right].map(pt => toFloor(f, ...pointOf(e, pt)));
+        const corners = [F, L, R, [L[0] + R[0] - F[0], L[1] + R[1] - F[1]]];
+        const ps = corners.map(c => c[0]), qs = corners.map(c => c[1]);
+        box = [Math.min(...ps), Math.max(...ps), Math.min(...qs), Math.max(...qs)];
+      } else {
+        const r = (e.half * 0.8) / f.rx, [p, q] = toFloor(f, e.x, e.y - e.half * 0.4);
+        box = [p - r, p + r, q - r, q + r];
+      }
+      if (box[0] < WALL_GAP - 1) box[0] = -2;
+      if (box[1] > 1 - WALL_GAP) box[1] = 2;
+      if (box[2] < WALL_GAP - 1) box[2] = -2;
+      if (box[3] > 1 - WALL_GAP) box[3] = 2;
+      return box;
+    }
+
+    // Solid things in the room, except `skip` and whatever is being carried.
+    const solids = (skip = null) => entities.filter(e => e.def.solid && e.zone === 'room' && e !== skip && !held(e));
+
+    // Move e's feet out of any furniture it's inside, by the shortest way
+    // that isn't into a wall. Returns the way it was pushed as [p, q]
+    // (each −1, 0 or +1), or null if it wasn't inside anything.
+    function pushOut(e) {
+      if (e.zone !== 'room' || e.on) return null;
+      const f = floorBox(), pad = (e.half * 0.4) / f.rx;
+      let [p, q] = toFloor(f, e.x, e.y), way = null;
+      for (const s of solids(e)) {
+        const [p0, p1, q0, q1] = footprint(s, f).map((v, i) => v + (i % 2 ? pad : -pad));
+        if (p <= p0 || p >= p1 || q <= q0 || q >= q1) continue;
+        const exits = [[p - p0, 0, p0, -1], [p1 - p, 0, p1, 1], [q - q0, 1, q0, -1], [q1 - q, 1, q1, 1]]
+          .filter(([, , edge]) => Math.abs(edge) <= 1).sort((a, b) => a[0] - b[0]);
+        if (!exits.length) continue;
+        const [, axis, edge, side] = exits[0];
+        if (axis === 0) p = edge; else q = edge;
+        way = axis === 0 ? [side, 0] : [0, side];
+      }
+      if (!way) return null;
+      [e.x, e.y] = fromFloor(f, p, q);
+      clamp(e);
+      return way;
+    }
+
+    // pushOut for something moving: it bounces off, like off the walls.
+    function bounceOff(e) {
+      const way = pushOut(e);
+      if (!way) return false;
+      const f = floorBox();
+      let vp = e.vx / f.rx + e.vy / f.ry, vq = e.vx / f.rx - e.vy / f.ry;
+      if (way[0] && Math.sign(vp) === -way[0]) vp *= -0.8;
+      if (way[1] && Math.sign(vq) === -way[1]) vq *= -0.8;
+      e.vx = ((vp + vq) / 2) * f.rx;
+      e.vy = ((vp - vq) / 2) * f.ry;
+      return true;
+    }
+
+    // Where a cat lands jumping down from furn: just clear of it, out in
+    // front if there's room (the front edges are p = 1 and q = −1).
+    function landingSpot(cat, furn, x, y) {
+      const f = floorBox(), pad = (cat.half * 0.5) / f.rx + 0.03;
+      const [p, q] = toFloor(f, x, y);
+      const [p0, p1, q0, q1] = footprint(furn, f);
+      const ways = [[p1 + pad - p, p1 + pad, q], [q - q0 + pad, p, q0 - pad], [p - p0 + pad + 1, p0 - pad, q], [q1 + pad - q + 1, p, q1 + pad]]
+        .filter(([, wp, wq]) => Math.abs(wp) <= 1 && Math.abs(wq) <= 1).sort((a, b) => a[0] - b[0]);
+      const [, wp, wq] = ways[0] ?? [0, p, q];
+      const [lx, ly] = fromFloor(f, wp, wq);
+      return stand(cat, lx, ly, 'room');
+    }
+
+    // ------------------------------------------------------------------
+    // Surfaces – the tops of tables and the levels of shelves (see SHELF
+    // and TABLE). Small things put there stay put and ride along when the
+    // furniture moves; cats jump up to the top. Everything up there keeps
+    // its own space: nothing can be put down on top of it, and when a
+    // surface is full, things go on the floor instead.
+    // Something on a surface has `on` (the furniture) and `spot` =
+    // { level, u, v }: u and v run from the front corner to the left and
+    // right corners.
+    // ------------------------------------------------------------------
+    // Screen point of (u, v) on a level of furn, and how high up that is.
+    function surfacePoint(furn, levelNo, u, v) {
+      const { front: F, left: L, right: R, h } = furn.def.surfaces[levelNo];
+      const [x, y] = pointOf(furn, [F[0] + u * (L[0] - F[0]) + v * (R[0] - F[0]), F[1] + u * (L[1] - F[1]) + v * (R[1] - F[1])]);
+      return { x, y, h: h * furn.s };
+    }
+    const edgeLengths = S => [Math.hypot(S.left[0] - S.front[0], S.left[1] - S.front[1]), Math.hypot(S.right[0] - S.front[0], S.right[1] - S.front[1])];
+    // How much room e takes up on furn, in furn's picture pixels (a cat
+    // sitting, not stretched out running).
+    const roomFor = (e, furn) => (e.kind === 'cat' ? (e.def.anim.sit.crop[2] * e.s) / 2 * 0.4 : e.half * 0.7) / furn.s;
+    const onLevel = (furn, levelNo, skip) => entities.filter(o => o.on === furn && o.spot.level === levelNo && o !== skip);
+
+    // Is (u, v) free for something r wide? Lower shelves only use their
+    // front half: the shelf above hides the back.
+    function freeAt(furn, levelNo, u, v, r, skip) {
+      const S = furn.def.surfaces[levelNo], [lu, lv] = edgeLengths(S);
+      const mu = (r * 0.35) / lu, mv = (r * 0.35) / lv;          // a little overhang is fine
+      if (u < mu || u > 1 - mu || v < mv || v > 1 - mv) return false;
+      if (levelNo > 0 && u + v > 1.1) return false;
+      return onLevel(furn, levelNo, skip).every(o =>
+        Math.hypot((o.spot.u - u) * lu, (o.spot.v - v) * lv) >= (r + roomFor(o, furn)) * 0.8);
+    }
+
+    // The free spot on a level nearest (u, v), or null if it's full.
+    function spotNear(furn, levelNo, u, v, r, skip) {
+      if (freeAt(furn, levelNo, u, v, r, skip)) return { level: levelNo, u, v };
+      const N = 12;
+      let best = null, bestD = Infinity;
+      for (let i = 0; i <= N; i++) {
+        for (let j = 0; j <= N; j++) {
+          const d = Math.hypot(i / N - u, j / N - v);
+          if (d < bestD && freeAt(furn, levelNo, i / N, j / N, r, skip)) { best = { level: levelNo, u: i / N, v: j / N }; bestD = d; }
+        }
+      }
+      return best;
+    }
+
+    // The surface under screen point (x, y), and a free spot on it for e
+    // (a cat only goes on the top). Null if there's no surface there, or
+    // if it's full.
+    function surfaceAt(e, x, y) {
+      if (e.kind !== 'cat' && (!SMALL.has(e.kind) || e.def.solid)) return null;
+      const tops = entities.filter(f => f.def.surfaces && f.zone === 'room' && f !== e && !held(f) && !f.dead)
+        .sort((a, b) => b.y - a.y);                      // the one in front first
+      for (const furn of tops) {
+        const levels = e.kind === 'cat' ? 1 : furn.def.surfaces.length;
+        for (let n = 0; n < levels; n++) {
+          const o = surfacePoint(furn, n, 0, 0), a = surfacePoint(furn, n, 1, 0), b = surfacePoint(furn, n, 0, 1);
+          const ax = a.x - o.x, ay = a.y - o.y, bx = b.x - o.x, by = b.y - o.y, det = ax * by - ay * bx;
+          const u = ((x - o.x) * by - (y - o.y) * bx) / det, v = (ax * (y - o.y) - ay * (x - o.x)) / det;
+          if (u < -0.15 || v < -0.15 || u > 1.15 || v > 1.15) continue;
+          const spot = spotNear(furn, n, clampTo(u, 0, 1), clampTo(v, 0, 1), roomFor(e, furn), e);
+          return spot ? { furn, spot } : null;
+        }
+      }
+      return null;
+    }
+
+    function putOn(e, furn, spot) {
+      Object.assign(e, { on: furn, spot, vx: 0, vy: 0, drop: 0 });
+      seat(e);
+    }
+
+    // Keep e on its spot (the furniture may be moving).
+    function seat(e) {
+      const { x, y, h } = surfacePoint(e.on, e.spot.level, e.spot.u, e.spot.v);
+      e.x = x;
+      e.y = y + h;                                       // its feet over the floor
+      e.lift = h + (held(e.on) ? HELD_LIFT * unit() : 0);
+    }
+
+    // Off its surface: a cat jumps down; a thing drops, flying off at
+    // (vx, vy) if given.
+    function unseat(e, vx = 0, vy = 0) {
+      if (e.kind === 'cat') return think(e);
+      Object.assign(e, { on: null, spot: null, drop: e.lift, dropV: -60 * unit(), vx, vy });
+    }
+
+    // Things dropped from up high fall, then land clear of furniture.
+    const GRAVITY = 1600;                                // px/s² at 2× room zoom
+    function fall(e, dt) {
+      e.dropV += GRAVITY * unit() * dt;
+      e.drop = Math.max(0, e.drop - e.dropV * dt);
+      if (!e.drop) pushOut(e);
+      if (e.kind !== 'ball') e.lift = e.drop;            // a ball does its own bouncing
+    }
+
+    // Can a cat get at something on a surface? From the top (it jumps up),
+    // or a bottom shelf from the floor.
+    const LOW_SHELF = 12;                                 // picture px: reachable from the floor
+    function reachable(item, cat) {
+      if (!item.on) return true;
+      if (item.spot.level > 0) return item.on.def.surfaces[item.spot.level].h <= LOW_SHELF;
+      return !cat || !!spotNear(item.on, 0, item.spot.u, item.spot.v, roomFor(cat, item.on), cat);   // room to jump up beside it
+    }
+
+    // Put something down where it was dropped, at (x, y) before it was
+    // kept to the floor: on a surface if it's over one with room (and
+    // `up` allows), otherwise on the floor clear of furniture. Furniture
+    // put down on small things pushes them out of the way.
+    function putDown(e, x = e.x, y = e.y, up = true) {
+      if (e.zone !== 'room') return;
+      const at = up && surfaceAt(e, x, y);
+      if (at) return putOn(e, at.furn, at.spot);
+      pushOut(e);
+      if (e.def.solid) {
+        for (const o of entities) if (o !== e && !o.on && o.kind !== 'cat' && !o.def.solid && o.zone === 'room') pushOut(o);
+      }
+    }
+
+    // A cat jumps from where it is to `to` ({ x, y, lift }) in an arc,
+    // then does `then`. Used to get on and off furniture.
+    function hop(cat, to, then = null, time = 0.5) {
+      const from = { x: cat.x, y: cat.y, lift: cat.lift };
+      let t = 0;
+      cat.hopTo = to;
+      face(cat, to);
+      actOnce(cat, 'jump', time, () => { land(cat); then?.(); }, dt => {
+        t = Math.min(1, t + dt / time);
+        cat.x = from.x + (to.x - from.x) * t;
+        cat.y = from.y + (to.y - from.y) * t;
+        cat.lift = from.lift + (to.lift - from.lift) * t + Math.sin(t * Math.PI) * 14 * unit();
+      });
+    }
+    // Finish a jump (also when something cuts it short).
+    function land(cat) {
+      const to = cat.hopTo;
+      if (!to) return;
+      cat.hopTo = null;
+      Object.assign(cat, { x: to.x, y: to.y, lift: to.lift });
+      if (!to.lift) cat.on = cat.spot = null;
+    }
+
+    // Jump down off whatever the cat is on (even if it was just thrown away).
+    function hopDown(cat, then) {
+      const to = landingSpot(cat, cat.on, cat.x, cat.y);
+      hop(cat, { x: to.x, y: to.y, lift: 0 }, then, 0.45);
+    }
+
+    // Jump up to a spot on furn's top.
+    function hopUp(cat, furn, spot, then) {
+      const p = surfacePoint(furn, 0, spot.u, spot.v);
+      Object.assign(cat, { on: furn, spot });
+      hop(cat, { x: p.x, y: p.y + p.h, lift: p.h }, then);
+    }
+
+    // ------------------------------------------------------------------
     // Objects that move on their own
     // ------------------------------------------------------------------
     function fling(e, speed) {
+      if (e.on) return unseat(e, rand(-1, 1) * speed * 0.3 * unit(), speed * 0.35 * unit());   // off the edge
       const a = rand(0, Math.PI * 2);
       e.vx = Math.cos(a) * speed * unit();
       e.vy = Math.sin(a) * speed * 0.6 * unit();
     }
 
-    // Slide by velocity and bounce off the walls and edges of the floor.
+    // Slide by velocity and bounce off the walls, the edges of the floor
+    // (or of the play area) and furniture. Says whether it bounced.
     function slide(e, dt, friction) {
-      e.x += e.vx * dt;
-      e.y += e.vy * dt;
+      const x = e.x + e.vx * dt, y = e.y + e.vy * dt;
+      e.x = x;
+      e.y = y;
       const { hp, hq } = clamp(e);
-      if (hp || hq) {                                       // flip the velocity across the edge it hit
+      let bounced = !!(hp || hq);
+      if (e.zone === 'yard') {                              // the strip's ends and edges
+        if (e.x !== x) e.vx = Math.abs(e.vx) * Math.sign(e.x - x) * 0.8;
+        if (e.y !== y) e.vy = Math.abs(e.vy) * Math.sign(e.y - y) * 0.8;
+        bounced = e.x !== x || e.y !== y;
+      } else if (hp || hq) {                                // flip the velocity across the edge it hit
         const f = floorBox();
         let vp = e.vx / f.rx + e.vy / f.ry, vq = e.vx / f.rx - e.vy / f.ry;
         if (hp && Math.sign(vp) === hp) vp *= -0.8;
@@ -1811,17 +2290,18 @@
         e.vx = ((vp + vq) / 2) * f.rx;
         e.vy = ((vp - vq) / 2) * f.ry;
       }
+      if (!(e.drop > 0) && bounceOff(e)) bounced = true;   // (in the air it can fly past furniture)
       const f = Math.exp(-friction * dt);
       e.vx *= f;
       e.vy *= f;
-      return { hp, hq };
+      return bounced;
     }
 
     function updateBall(b, dt) {
       slide(b, dt, 1.2);
       const speed = Math.hypot(b.vx, b.vy);
       b.hop += (dt * speed) / 25;
-      b.lift = Math.abs(Math.sin(b.hop)) * Math.min(speed / 12, 24 * unit());
+      b.lift = (b.drop || 0) + Math.abs(Math.sin(b.hop)) * Math.min(speed / 12, 24 * unit());
     }
 
     // The mouse darts about in short dashes with pauses in between. When a
@@ -1865,8 +2345,7 @@
         const k = Math.min(1, 14 * dt);                        // quick to start and stop
         m.vx += (Math.cos(m.heading ?? 0) * speed * u - m.vx) * k;
         m.vy += (Math.sin(m.heading ?? 0) * speed * 0.6 * u - m.vy) * k;
-        const { hp, hq } = slide(m, dt, 0);
-        if (hp || hq) m.heading = Math.atan2(m.vy / 0.6, m.vx);   // carry on the way it bounced
+        if (slide(m, dt, 0)) m.heading = Math.atan2(m.vy / 0.6, m.vx);   // carry on the way it bounced
       }
       const speed = Math.hypot(m.vx, m.vy);
       if (speed > 5) {
@@ -1881,12 +2360,14 @@
     function escapeHeading(m, cat) {
       const f = floorBox(), u = unit();
       const away = Math.atan2((m.y - cat.y) / 0.6, m.x - cat.x);
+      const boxes = solids().map(s => footprint(s, f));
       let best = away, bestScore = -Infinity;
       for (let i = -4; i <= 4; i++) {
         const a = away + i * 0.4 + rand(-0.15, 0.15);
         const [p, q] = toFloor(f, m.x + Math.cos(a) * 110 * u, m.y + Math.sin(a) * 0.6 * 110 * u);
         const out = Math.max(Math.abs(p), Math.abs(q));
-        const score = Math.cos(a - away) - Math.max(0, out - 0.8) * 8;
+        const blocked = boxes.some(([p0, p1, q0, q1]) => p > p0 && p < p1 && q > q0 && q < q1);
+        const score = Math.cos(a - away) - Math.max(0, out - 0.8) * 8 - (blocked ? 3 : 0);
         if (score > bestScore) { best = a; bestScore = score; }
       }
       return best;
@@ -1964,8 +2445,15 @@
         return;
       }
       if (e.fixed) return;                                  // scenery stays put
+      Object.assign(drag, { homeX: e.x, homeY: e.y, homeZone: e.zone, homeOn: e.on, homeSpot: e.spot });
+      if (e.on) {                                           // lifted off a table or shelf
+        land(e);
+        e.y -= e.lift;
+        Object.assign(e, { on: null, spot: null, lift: 0 });
+      }
+      e.drop = 0;
       const p = toWorld(drag.sx, drag.sy);
-      Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y, homeX: e.x, homeY: e.y, homeZone: e.zone });
+      Object.assign(drag, { ox: e.x - p.x, oy: e.y - p.y });
       if (e.kind === 'cat') {
         if (e === menuCat) catMenu.hidePopover();
         settle(e);
@@ -1974,6 +2462,7 @@
         e.sprite.gotoAndStop(3);                            // mid-leap: legs dangling
       } else {
         if (e.user) think(e.user);
+        for (const c of entities) if (c.kind === 'cat' && c.on === e) think(c);   // cats on it jump off
         e.vx = e.vy = 0;
       }
     }
@@ -1995,21 +2484,30 @@
         if (drag.e.fixed) return;
         const p = toWorld(ev.clientX, ev.clientY);
         if (drag.e.kind === 'cat') drag.e.zone = zoneAt(p);
-        drag.e.x = p.x + drag.ox;
-        drag.e.y = p.y + drag.oy;
+        drag.x = drag.e.x = p.x + drag.ox;                 // drag.x, y: where it is before it's kept to the floor
+        drag.y = drag.e.y = p.y + drag.oy;
         clamp(drag.e);
         const binning = isOver(trashEl, ev);
         trashEl.classList.toggle('armed', binning);
-        binning ? hideDrop() : markDrop(drag.e.x, drag.e.y, drag.e.half);
+        binning ? hideDrop() : markLanding(drag.e, drag.x, drag.y);
       } else {
         drag.ghost.style.transform = `translate(${ev.clientX - drag.gw / 2}px, ${ev.clientY - drag.gh}px)`;
         if (!isOver(sceneEl, ev) || drag.def.kind === 'wall') return hideDrop();
         // Where it would land: the same spot spawn() will put it.
         const p = toWorld(ev.clientX, ev.clientY), def = drag.def;
         const half = (def.look.crop[2] * sizeOf(def)) / 2;
-        const at = stand({ half }, p.x, p.y, def.kind === 'cat' ? zoneAt(p) : 'room');
-        markDrop(at.x, at.y, half);
+        const zone = def.kind === 'cat' ? zoneAt(p) : 'room';
+        markLanding({ def, kind: def.kind, half, zone }, p.x, p.y);
       }
+    }
+
+    // Show where something carried to (x, y) would land: up on a table or
+    // shelf if it's over one with room, otherwise on the floor.
+    function markLanding(e, x, y) {
+      const top = e.zone === 'room' && surfaceAt(e, x, y);
+      if (!top) { const at = stand(e, x, y); return markDrop(at.x, at.y, e.half); }
+      const p = surfacePoint(top.furn, top.spot.level, top.spot.u, top.spot.v);
+      markDrop(p.x, p.y, e.half);
     }
 
     // Which area a cat dragged to world point p goes in.
@@ -2023,13 +2521,14 @@
       document.body.classList.remove('dragging');
       trashEl.classList.remove('armed');
       hideDrop();
-      const { e, w, def, moved, ghost, homeX, homeY, homeZone } = drag;
+      const { e, w, def, moved, ghost, homeX, homeY, homeZone, homeOn, homeSpot, x: dropX, y: dropY } = drag;
       drag = null;
       ghost?.remove();
       const cancelled = ev.type === 'pointercancel';
 
       if (w) {                                              // a wall object
         if (!moved) return selectWall(w);
+        touched();
         if (!cancelled && isOver(trashEl, ev)) {
           Object.assign(w, { x: homeX, y: homeY });
           fitOnWall(w);
@@ -2042,6 +2541,7 @@
         if (!cancelled && isOver(sceneEl, ev)) {
           const p = toRoom(ev.clientX, ev.clientY), [, , width, height] = def.frame;
           selectWall(addWall(def, p.x - width / 2, p.y - height));
+          touched();
         }
         return;
       }
@@ -2054,20 +2554,27 @@
         if (!cancelled && isOver(sceneEl, ev)) {
           const p = toWorld(ev.clientX, ev.clientY);
           const zone = def.kind === 'cat' ? zoneAt(p) : 'room';   // only cats go out to play
-          emote(spawn(def, p.x, p.y, { zone }), '✨');
+          const added = spawn(def, p.x, p.y, { zone });
+          if (def.kind !== 'cat') touched();
+          putDown(added, p.x, p.y);
+          if (added.on && added.kind === 'cat') act(added, 'sit', rand(3, 5));
+          emote(added, '✨');
         }
         return;
       }
       if (e.fixed) return;
       if (!cancelled && isOver(trashEl, ev)) {              // put it back while we ask
         Object.assign(e, { x: homeX, y: homeY, zone: homeZone });
+        if (homeOn && !homeOn.dead) putOn(e, homeOn, homeSpot);
         if (e.kind === 'cat') act(e, 'sit', 0.8);
         confirmDelete(e);
         return;
       }
+      putDown(e, dropX, dropY);
+      if (e.kind !== 'cat') touched();
       if (e.kind === 'cat') {
         if (e.zone !== homeZone) say(e, e.zone === 'yard' ? 'Wheee!' : 'Home!');
-        act(e, 'sit', 0.8);
+        act(e, 'sit', e.on ? rand(3, 5) : 0.8);
       }
     }
 
@@ -2130,6 +2637,7 @@
     }
 
     function nudgeWall(w, dx, dy) {
+      touched();
       w.x += dx;
       w.y += dx * WALLS[w.def.wall].slope + dy;          // along the wall, not straight across
       fitOnWall(w);
@@ -2154,7 +2662,9 @@
       const name = Object.assign(document.createElement('strong'), { textContent: w.def.name });
       const yes = await ask({ pic: thumb(w.def, fitScale(w.def, 64)), text: ['Take ', name, ' off the wall?'],
                               yes: 'Remove', no: 'Keep it' });
-      if (yes) removeWall(w);
+      if (!yes) return;
+      removeWall(w);
+      touched();
     }
 
     function setupWalls() {
@@ -2174,9 +2684,6 @@
       });
     }
 
-    function hangStartingWalls() {
-      for (const [name, x, y] of START_WALL) addWall(CATALOG.find(d => d.name === name), x, y);
-    }
 
     // ------------------------------------------------------------------
     // Cat menu – click a cat to name it, see how it's doing and tell it
@@ -2262,7 +2769,7 @@
       const w = catMenu.offsetWidth, h = catMenu.offsetHeight;
       let left = box.left + cat.x + cat.half + 12;
       if (left + w > innerWidth - 8) left = box.left + cat.x - cat.half - 12 - w;
-      const top = box.top + cat.y - cat.tall / 2 - h / 2;
+      const top = box.top + cat.y - cat.lift - cat.tall / 2 - h / 2;
       catMenu.style.left = `${clampTo(left, 8, Math.max(8, innerWidth - w - 8))}px`;
       catMenu.style.top = `${clampTo(top, 8, Math.max(8, innerHeight - h - 8))}px`;
     }
@@ -2315,7 +2822,9 @@
       const name = Object.assign(document.createElement('strong'), { textContent: e.def.name });
       const yes = await ask({ pic: thumb(e.def, fitScale(e.def, 64)), text: ['Delete ', name, ' from the room?'],
                               yes: 'Delete', no: 'Keep it' });
-      if (yes) remove(e);
+      if (!yes) return;
+      remove(e);
+      if (e.kind !== 'cat') touched();
     }
 
     async function confirmReset() {
@@ -2360,7 +2869,13 @@
     async function pickRoom() {
       const choice = await choose(roomsDialog, roomGrid, () => ROOM_TYPES.map(({ name }, i) =>
         ({ value: i, label: `${name} room`, pic: roomThumb(buildRoom(i), 64) })), roomType);
-      if (choice !== null) setRoom(Number(choice));
+      if (choice === null || Number(choice) === roomType) return;
+      const i = Number(choice), name = Object.assign(document.createElement('strong'), { textContent: `${ROOM_TYPES[i].name} room` });
+      // Your own arrangement isn't thrown away without asking.
+      const swap = !edited || await ask({ pic: roomThumb(buildRoom(i), 96),
+        text: ['Bring in the ', name, '’s furniture too? Your cats stay.'], yes: 'Furnish it', no: 'Keep mine' });
+      setRoom(i);
+      if (swap) refurnish(i);
     }
 
     // ------------------------------------------------------------------
@@ -2525,15 +3040,60 @@
       if (choice !== null) setSky(/^\d+$/.test(choice) ? Number(choice) : choice);
     }
 
-    function populate() {
-      const f = floorBox();
-      catsArrived = 0;
-      for (const [name, fx, fy] of START) {
-        spawn(CATALOG.find(d => d.name === name), f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry);
+    // ------------------------------------------------------------------
+    // Furnishing – each room type comes with its own furniture (see
+    // ARRANGEMENTS). Picking another room brings its furniture in too,
+    // unless you've changed things, when it asks first.
+    // ------------------------------------------------------------------
+    let edited = false;                                   // moved, added or removed anything since furnishing?
+    const touched = () => { edited = true; };
+
+    function byName(name) {
+      const def = CATALOG.find(d => d.name === name);
+      if (!def) throw new Error(`There's no "${name}" in the catalogue`);
+      return def;
+    }
+    // Screen point of a spot on the floor given as fractions (see ARRANGEMENTS).
+    const atFloor = (fx, fy) => { const f = floorBox(); return [f.x + (fx * 2 - 1) * f.rx, f.y + (fy * 2 - 1) * f.ry]; };
+
+    // Bring in room type i's things: on the floor, up on tables and
+    // shelves, and on the walls. Returns its plan.
+    function furnish(i) {
+      const plan = ARRANGEMENTS[ROOM_TYPES[i].look](ROOM_TYPES[i].colours);
+      const placed = plan.floor.map(([name, fx, fy]) => spawn(byName(name), ...atFloor(fx, fy)));
+      for (const [name, under, levelNo, [u, v]] of plan.up) {
+        const furn = placed.find(f => f.def.name === under), e = spawn(byName(name), furn.x, furn.y);
+        const spot = spotNear(furn, levelNo, u, v, roomFor(e, furn), e);
+        if (spot) putOn(e, furn, spot);
+        else remove(e, true);
       }
+      for (const [name, x, y] of plan.walls) addWall(byName(name), x, y);
+      edited = false;
+      return plan;
+    }
+
+    // Swap the room's things (not its cats) for room type i's.
+    function refurnish(i) {
+      selectWall(null);
+      for (const e of entities.filter(e => e.zone === 'room' && e.kind !== 'cat')) remove(e, true);
+      for (const w of walls) w.sprite.destroy();
+      walls.length = 0;
+      furnish(i);
+      for (const c of entities.filter(c => c.kind === 'cat' && c.zone === 'room')) think(c);   // a look round the new room
+      const f = floorBox();
+      effectAt('party', f.x, f.y);
+    }
+
+    function populate() {
+      catsArrived = 0;
+      const plan = furnish(roomType);
+      spawn(byName('Cream cat'), ...atFloor(...plan.cat));
       for (const def of SCENERY) spawn(def, yard.x0, yard.y1, { zone: 'yard', fixed: true });
       placeScenery();
-      hangStartingWalls();
+      const tree = entities.find(e => e.def === PLAY_TREE), from = tree.x + tree.half;
+      for (const [name, along] of YARD_TOYS) {
+        spawn(byName(name), from + along * (yard.x1 - from), (yard.y0 + yard.y1) / 2, { zone: 'yard' });
+      }
     }
 
     // Back to the starting room: default room type, starting cats and things.
@@ -2550,6 +3110,7 @@
       walls.length = 0;
       for (const child of [...fx.removeChildren(), ...talk.removeChildren()]) child.destroy({ children: true });   // pop-ups, effects, bubbles
       emotes.length = 0;
+      setPaused(false);
       setRoom(DEFAULT_ROOM);
       setSky(DEFAULT_SKY);
       populate();
@@ -2624,9 +3185,11 @@
           button.addEventListener('pointerdown', ev => startDrag({ def }, ev));
           button.addEventListener('click', ev => {
             if (ev.detail && dragMoved) return;              // this click just ended a drag
+            if (def.kind !== 'cat') touched();
             if (def.kind === 'wall') return selectWall(addWall(def));
-            const at = randomSpot();
-            emote(spawn(def, at.x, at.y), '✨');
+            const at = randomSpot(), added = spawn(def, at.x, at.y);
+            putDown(added, added.x, added.y, false);         // somewhere on the floor
+            emote(added, '✨');
           });
           row.appendChild(button);
         }
@@ -2748,6 +3311,18 @@
       }
     }
 
+    // A camera click: a short burst of noise, with the other sounds.
+    function shutter() {
+      if (!audio || !sound.cats || audio.ctx.state !== 'running') return;
+      const { ctx } = audio, length = Math.round(ctx.sampleRate * 0.07);
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate), data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3 * 0.6;
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audio.cats);
+      source.start();
+    }
+
     // A cat's sound for something it says, from roughly where it is.
     function voice(cat, text) {
       const pan = (cat.x / app.screen.width) * 1.2 - 0.6;
@@ -2783,11 +3358,13 @@
       on ? playMusic() : pauseMusic();
     }
 
-    function placeSoundMenu() {
-      const r = soundButton.getBoundingClientRect(), w = soundMenu.offsetWidth;
-      soundMenu.style.left = `${clampTo(r.right - w, 8, innerWidth - w - 8)}px`;
-      soundMenu.style.top = `${r.bottom + 8}px`;
+    // Open a tool's menu just under its button, kept on the screen.
+    function placeUnder(menu, button) {
+      const r = button.getBoundingClientRect(), w = menu.offsetWidth;
+      menu.style.left = `${clampTo(r.right - w, 8, innerWidth - w - 8)}px`;
+      menu.style.top = `${r.bottom + 8}px`;
     }
+    const placeSoundMenu = () => placeUnder(soundMenu, soundButton);
 
     function setupSound() {
       loadSoundSettings();
@@ -2846,6 +3423,148 @@
     }
 
     // ------------------------------------------------------------------
+    // Photos – pause everything to set up a shot, then take a picture of
+    // the room, the room and play area, or the whole screen, to save or
+    // share. The whole screen needs the bar drawn as a picture too, which
+    // SnapDOM (assets/vendor/snapdom.mjs) does; it's only loaded then.
+    // ------------------------------------------------------------------
+    const photoMenu = document.getElementById('photo-menu');
+    const photoButton = document.getElementById('photo-button');
+    const photoDialog = document.getElementById('photo');
+    const pausedBadge = document.getElementById('paused');
+    let paused = false;
+
+    // While paused the cats, toys and effects stop where they are (their
+    // animations too), but you can still drag things about.
+    function setPaused(on) {
+      paused = on;
+      on ? PIXI.Ticker.shared.stop() : PIXI.Ticker.shared.start();    // what drives the animations
+      const toggle = document.getElementById('pause-toggle');
+      toggle.setAttribute('aria-pressed', String(on));
+      toggle.textContent = on ? 'On' : 'Off';
+      pausedBadge.hidden = !on;
+    }
+
+    const loadImage = src => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Couldn't load ${src}`));
+      img.src = src;
+    });
+
+    // The scene as it looks: the sky picture (drawn by CSS, so drawn here
+    // the same way: covering the scene, centred) with the canvas on top.
+    // In device pixels.
+    async function sceneShot() {
+      const res = app.renderer.resolution, { width, height } = app.screen;
+      const out = Object.assign(document.createElement('canvas'), { width: Math.round(width * res), height: Math.round(height * res) });
+      const ctx = out.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = getComputedStyle(sceneEl).backgroundColor;
+      ctx.fillRect(0, 0, out.width, out.height);
+      if (sceneEl.dataset.sky) {
+        const sky = await loadImage(sceneEl.dataset.sky);
+        const k = Math.max(out.width / sky.width, out.height / sky.height);
+        ctx.drawImage(sky, (out.width - sky.width * k) / 2, (out.height - sky.height * k) / 2, sky.width * k, sky.height * k);
+      }
+      const marks = [wallMark.visible, dropMarker.visible];
+      wallMark.visible = dropMarker.visible = false;       // no selection outline in the photo
+      const picture = app.renderer.extract.canvas({ target: app.stage, frame: new PIXI.Rectangle(0, 0, width, height), resolution: res });
+      [wallMark.visible, dropMarker.visible] = marks;
+      ctx.drawImage(picture, 0, 0, out.width, out.height);
+      return out;
+    }
+
+    // Just the room (with a little sky round it).
+    async function roomShot() {
+      const scene = await sceneShot(), res = app.renderer.resolution, [cx, cy, cw, ch] = ROOM.crop, pad = 16;
+      const x = Math.max(0, (view.x + cx * view.k - pad) * res), y = Math.max(0, (view.y + cy * view.k - pad) * res);
+      const w = Math.min(scene.width - x, (cw * view.k + pad * 2) * res), h = Math.min(scene.height - y, (ch * view.k + pad * 2) * res);
+      const out = Object.assign(document.createElement('canvas'), { width: Math.round(w), height: Math.round(h) });
+      out.getContext('2d').drawImage(scene, x, y, w, h, 0, 0, out.width, out.height);
+      return out;
+    }
+
+    // The whole page: the bar and the signature as pictures, the scene
+    // between them. Without SnapDOM (offline, say) it's just the scene.
+    async function screenShot() {
+      const res = app.renderer.resolution;
+      const out = Object.assign(document.createElement('canvas'), { width: Math.round(innerWidth * res), height: Math.round(innerHeight * res) });
+      const ctx = out.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = getComputedStyle(document.body).backgroundColor;
+      ctx.fillRect(0, 0, out.width, out.height);
+      const at = el => el.getBoundingClientRect();
+      const put = (canvas, r) => ctx.drawImage(canvas, r.left * res, r.top * res, r.width * res, r.height * res);
+      put(await sceneShot(), at(sceneEl));
+      try {
+        const { snapdom } = await import('./assets/vendor/snapdom.mjs');
+        for (const el of [document.querySelector('.bar'), document.querySelector('.signature')]) {
+          put(await snapdom.toCanvas(el, { dpr: res, scale: 1 }), at(el));
+        }
+      } catch (err) {
+        console.warn('Photo without the bar:', err);
+      }
+      return out;
+    }
+
+    const SHOTS = { room: roomShot, scene: sceneShot, screen: screenShot };
+    let photoUrl = null;
+
+    async function takePhoto(kind) {
+      const buttons = photoMenu.querySelectorAll('[data-shot]');
+      buttons.forEach(b => { b.disabled = true; });
+      try {
+        photoMenu.hidePopover();
+        selectWall(null);
+        await new Promise(requestAnimationFrame);          // the menu is gone before the bar is drawn
+        const canvas = await SHOTS[kind]();
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        shutter();
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          const flash = Object.assign(document.createElement('div'), { className: 'flash' });
+          flash.addEventListener('animationend', () => flash.remove());
+          document.body.appendChild(flash);
+        }
+        showPhoto(blob);
+      } finally {
+        buttons.forEach(b => { b.disabled = false; });
+      }
+    }
+
+    // Show the photo with Save (a download) and, where the browser can
+    // share files (phones mostly), Share.
+    function showPhoto(blob) {
+      const now = new Date(), two = n => String(n).padStart(2, '0');           // local time, e.g. 2026-10-06-1533
+      const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}`;
+      const name = `cat-playground-${stamp}.png`;
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+      photoUrl = URL.createObjectURL(blob);
+      document.getElementById('photo-img').src = photoUrl;
+      const save = document.getElementById('photo-save');
+      save.href = photoUrl;
+      save.download = name;
+      const share = document.getElementById('photo-share');
+      const file = new File([blob], name, { type: 'image/png' });
+      share.hidden = !navigator.canShare?.({ files: [file] });
+      share.onclick = () => navigator.share({ files: [file], title: 'Cat Playground' }).catch(() => {});   // cancelled is fine
+      showDialog(photoDialog);
+    }
+
+    function setupPhotos() {
+      photoMenu.addEventListener('toggle', ev => { if (ev.newState === 'open') placeUnder(photoMenu, photoButton); });
+      addEventListener('resize', () => { if (photoMenu.matches(':popover-open')) placeUnder(photoMenu, photoButton); });
+      document.getElementById('pause-toggle').addEventListener('click', () => setPaused(!paused));
+      pausedBadge.addEventListener('click', () => setPaused(false));
+      for (const b of photoMenu.querySelectorAll('[data-shot]')) b.addEventListener('click', () => takePhoto(b.dataset.shot));
+      addEventListener('keydown', ev => {
+        if (ev.key?.toLowerCase() !== 'p' || ev.ctrlKey || ev.metaKey || ev.altKey || ev.repeat) return;
+        if (ev.target.closest?.('input, textarea') || document.querySelector('dialog[open]')) return;
+        setPaused(!paused);
+      });
+    }
+
+    // ------------------------------------------------------------------
     // Main
     // ------------------------------------------------------------------
     function start() {
@@ -2853,6 +3572,7 @@
       setupMenu();
       setupWalls();
       setupSound();
+      setupPhotos();
       updateSky();
       setInterval(updateSky, 60_000);
       setRoom(DEFAULT_ROOM);
@@ -2866,9 +3586,19 @@
 
       // Frame-rate independent via deltaMS; capped so a hidden tab doesn't teleport things.
       app.ticker.add(({ deltaMS }) => {
-        const dt = Math.min(deltaMS / 1000, 0.1);
-        for (const e of [...entities]) if (!e.dead && !held(e)) UPDATE[e.kind]?.(e, dt);
-        for (const e of entities) draw(e);
+        const dt = paused ? 0 : Math.min(deltaMS / 1000, 0.1);   // paused: nothing moves on its own
+        for (const e of [...entities]) {
+          if (paused || e.dead || held(e)) continue;
+          if (e.drop > 0) fall(e, dt);
+          UPDATE[e.kind]?.(e, dt);
+        }
+        for (const e of entities) {
+          if (!e.on || e.hopTo) continue;
+          if (e.on.dead) unseat(e);
+          else seat(e);
+        }
+        for (const e of entities) if (!e.on) draw(e);
+        for (const e of entities) if (e.on) draw(e);
         updateEmotes(dt);
         updateBubbles(dt);
         updateStars(dt);
