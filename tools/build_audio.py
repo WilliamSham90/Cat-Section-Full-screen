@@ -1,11 +1,11 @@
-"""Make the page's sound files from the originals in "Cat sounds" and music/.
+"""Make the page's sound files from the originals in source/sounds and source/music.
 
 The originals are large WAVs (up to 96 kHz) and Ogg Vorbis, which iPhone
 Safari may not play. This writes small MP3s, which every browser plays,
 levelled so no sound is much louder than the others:
 
-  audio/sfx/<name>.mp3    mono, leading silence trimmed, -20 LUFS
-  audio/music/<name>.mp3  stereo, -20 LUFS (the page plays music quieter still)
+  assets/audio/sfx/<name>.mp3    mono, leading silence trimmed, -20 LUFS
+  assets/audio/music/<name>.mp3  stereo, -20 LUFS (the page plays music quieter still)
 
 Levelling is ffmpeg's two-pass loudnorm in linear mode, so each file is
 just turned up or down as a whole; the music's dynamics are untouched.
@@ -20,22 +20,22 @@ import json
 import subprocess
 from pathlib import Path
 
-OUT = Path('audio')
+OUT = Path('assets/audio')
 
 SFX = {
-    'meow1': 'Cat sounds/Cat_SFX_Meow1.wav',
-    'meow2': 'Cat sounds/Cat_SFX_Meow2.wav',
-    'meow3': 'Cat sounds/Cat_SFX_Meow3.wav',
-    'meow4': 'Cat sounds/Cat_SFX_Meow4.wav',
-    'hiss': 'Cat sounds/Cat_SFX_Hiss.wav',
-    'purr': 'Cat sounds/Cat_SFX_Purr.wav',
-    'scratch': 'Cat sounds/Cat_SFX_Litter.wav',
+    'meow1': 'source/sounds/meow1.wav',
+    'meow2': 'source/sounds/meow2.wav',
+    'meow3': 'source/sounds/meow3.wav',
+    'meow4': 'source/sounds/meow4.wav',
+    'hiss': 'source/sounds/hiss.wav',
+    'purr': 'source/sounds/purr.wav',
+    'scratch': 'source/sounds/litter.wav',
 }
 MUSIC = {
-    'forgotten-biomes': 'music/Forgotten Biomes.ogg',
-    'polar-lights': 'music/Polar Lights.ogg',
-    'sunlight-through-leaves': 'music/Sunlight Through Leaves.ogg',
-    'what-clouds-are-made-of': 'music/What Clouds Are Made Of.ogg',
+    'forgotten-biomes': 'source/music/forgotten-biomes.ogg',
+    'polar-lights': 'source/music/polar-lights.ogg',
+    'sunlight-through-leaves': 'source/music/sunlight-through-leaves.ogg',
+    'what-clouds-are-made-of': 'source/music/what-clouds-are-made-of.ogg',
 }
 TARGET = 'I=-20:TP=-2:LRA=11'
 

@@ -1,9 +1,9 @@
 """Turn the pixel-effect GIFs into PNG strips the page can use.
 
-The GIFs in "Pixel effects/Guide/img" are previews on a solid black
-background. For each effect listed in EFFECTS this writes
-effects/<name>.png: every frame side by side, with the black made
-transparent. The art never uses pure black, so nothing else is lost.
+The GIFs in source/effects/ are previews on a solid black background.
+For each effect listed in EFFECTS this writes assets/effects/<name>.png:
+every frame side by side, with the black made transparent. The art never
+uses pure black, so nothing else is lost.
 
 Run from the repository root after changing EFFECTS:
 
@@ -15,8 +15,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageSequence
 
-SOURCE = Path('Pixel effects/Guide/img')
-OUT = Path('effects')
+SOURCE = Path('source/effects')
+OUT = Path('assets/effects')
 
 # name in the page -> GIF it comes from
 EFFECTS = {

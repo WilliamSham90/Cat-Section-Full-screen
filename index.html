@@ -53,15 +53,15 @@
     /* Rounded cream square, stretched to any size. */
     .tile {
       border: 8px solid transparent;
-      border-image: url("ui/tile.png") 4 fill / 8px;
+      border-image: url("assets/ui/tile.png") 4 fill / 8px;
       background: none;
       image-rendering: pixelated;
       cursor: pointer;
     }
     .tile:hover { filter: brightness(1.04); }
-    .tile:active { border-image-source: url("ui/tile-down.png"); }
+    .tile:active { border-image-source: url("assets/ui/tile-down.png"); }
     .tile[aria-expanded="true"], .tile[aria-current="true"], .tile[aria-pressed="true"] {
-      border-image-source: url("ui/tile-sand.png");
+      border-image-source: url("assets/ui/tile-sand.png");
     }
     /* Long button with a darker bottom edge. */
     .btn {
@@ -70,7 +70,7 @@
       border-style: solid;
       border-color: transparent;
       border-width: 6px 6px 10px;
-      border-image: url("ui/button.png") 3 3 5 fill / 6px 6px 10px;
+      border-image: url("assets/ui/button.png") 3 3 5 fill / 6px 6px 10px;
       background: none;
       color: var(--ink);
       font-weight: 600;
@@ -81,13 +81,13 @@
     }
     .btn:hover { filter: brightness(1.07); }
     .btn:active { transform: translateY(2px); }
-    .btn.dark { border-image-source: url("ui/button-dark.png"); color: var(--cream); }
+    .btn.dark { border-image-source: url("assets/ui/button-dark.png"); color: var(--cream); }
     /* Cream panel with cat ears; content sits below the ears. */
     .panel {
       border-style: solid;
       border-color: transparent;
       border-width: 46px 14px 16px;
-      border-image: url("ui/panel.png") 26 25 12 fill / 52px 50px 24px;
+      border-image: url("assets/ui/panel.png") 26 25 12 fill / 52px 50px 24px;
       background: none;
       color: var(--ink);
       image-rendering: pixelated;
@@ -100,7 +100,7 @@
       border-style: solid;
       border-color: transparent;
       border-width: 6px 8px 6px 46px;
-      border-image: url("ui/nameplate.png") 3 4 3 23 fill / 6px 8px 6px 46px;
+      border-image: url("assets/ui/nameplate.png") 3 4 3 23 fill / 6px 8px 6px 46px;
       image-rendering: pixelated;
     }
 
@@ -108,7 +108,7 @@
     .bar {
       display: flex;
       gap: 12px;
-      padding: 8px 12px;
+      padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
       background: var(--cocoa);
       border-bottom: 4px solid var(--cocoa-dark);
     }
@@ -298,7 +298,7 @@
       cursor: pointer;
     }
     .tracks input { position: absolute; opacity: 0; pointer-events: none; }
-    .tracks label:has(input:checked) { border-image-source: url("ui/tile-sand.png"); }
+    .tracks label:has(input:checked) { border-image-source: url("assets/ui/tile-sand.png"); }
     .tracks label:has(input:checked)::before { content: "♪ "; }
     .tracks label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
     .volume { display: flex; align-items: center; gap: 8px; font-size: 13px; }
@@ -308,7 +308,7 @@
     /* ---- Signature, on a cat name plate ---- */
     .signature {
       position: fixed;
-      right: 12px;
+      right: max(12px, env(safe-area-inset-right));
       bottom: calc(var(--yard-strip, 0px) + 12px);     /* just above the play area */
       z-index: 5;
       gap: 8px;
@@ -441,7 +441,7 @@
     </form>
   </dialog>
 
-  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.22.0/dist/pixi.min.js"></script>
+  <script src="assets/vendor/pixi.min.js"></script>          <!-- PixiJS 8.22.0 -->
   <script type="module">
     // ------------------------------------------------------------------
     // Catalogue – every cat and object in the control bar
@@ -450,29 +450,24 @@
     // phones). Cat 1 is drawn at twice the detail of the others, hence 2 vs 4.
     // Cat sheets are strips of square frames; the frame count comes from the
     // image size, so only the file names are listed here.
+    const CAT_ANIMS = ['idle', 'run', 'sit', 'sleep', 'jump', 'attack'];
     const CATS = [
-      { name: 'Cream cat', dir: 'Cat 1/', scale: 2,
-        files: { idle: 'Idle', run: 'Running', sit: 'Chilling', sleep: 'Sleeping', jump: 'Jump', attack: 'Attack', happy: 'Happy' } },
-      { name: 'Tiger cat', dir: 'TigerCat/', scale: 4,
-        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
-      { name: 'Batman cat', dir: 'BatmanCat/', scale: 4,
-        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
-      { name: 'Egyptian cat', dir: 'EgyptCat/', scale: 4,
-        files: { idle: 'IdleCatb', run: 'RunCatb', sit: 'Sittingb', sleep: 'SleepCatb', jump: 'JumpCabt', attack: 'AttackCatb' } },
-      { name: 'Siamese cat', dir: 'Siamese/', scale: 4,
-        files: { idle: 'IdleCattt', run: 'RunCattt', sit: 'Sittinggg', sleep: 'SleepCattt', jump: 'JumpCatttt', attack: 'AttackCattt' } },
-      { name: 'Calico cat', dir: 'ThreeColor/', scale: 4,
-        files: { idle: 'IdleCatt', run: 'RunCatt', sit: 'Sittingg', sleep: 'SleepCatt', jump: 'JumpCattt', attack: 'AttackCatt' } },
-      { name: 'Odd-eyed cat', dir: 'White-DifferentEyes/', scale: 4,
-        files: { idle: 'IdleCatttt', run: 'RunCatttt', sit: 'Sittingggg', sleep: 'SleepCatttt', jump: 'JumpCattttt', attack: 'AttackCattt' } },
+      { name: 'Cream cat', dir: 'cream', scale: 2, anims: [...CAT_ANIMS, 'happy'] },
+      { name: 'Tiger cat', dir: 'tiger', scale: 4, anims: CAT_ANIMS },
+      { name: 'Batman cat', dir: 'batman', scale: 4, anims: CAT_ANIMS },
+      { name: 'Egyptian cat', dir: 'egyptian', scale: 4, anims: CAT_ANIMS },
+      { name: 'Siamese cat', dir: 'siamese', scale: 4, anims: CAT_ANIMS },
+      { name: 'Calico cat', dir: 'calico', scale: 4, anims: CAT_ANIMS },
+      { name: 'Odd-eyed cat', dir: 'odd-eyed', scale: 4, anims: CAT_ANIMS },
     ];
+    const catUrl = (cat, anim) => `assets/cats/${cat.dir}/${anim}.png`;
 
     // "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps)
     const ANIM_SPEED = { idle: 0.1, run: 0.22, sit: 0.07, sleep: 0.04, jump: 0.25, attack: 0.25, happy: 0.12 };
 
     // frame = [x, y, w, h] of the first frame; `frames` more follow every `stride` px.
     // kind = how cats use it (see USES below).
-    const ITEM = 'sprite/CatItems/';
+    const ITEM = 'assets/items/';
     const cells = (group, file, cols, size, names, props) => names.map((name, i) => ({
       group, name, src: ITEM + file, ...props,
       frame: [(i % cols) * size, Math.floor(i / cols) * size, size, size],
@@ -480,29 +475,29 @@
     // The room decorations sheet holds pictures of every size, so each one
     // is listed by name with its [x, y, w, h] on the sheet. Its pixels match
     // the room pictures, so scale 2 keeps them in proportion with the room.
-    const DECOR = ITEM + 'Decorations/CatRoomDecorations.png';
+    const DECOR = ITEM + 'decor/room-decorations.png';
     const decor = (group, props, list) => list.map(([name, frame]) => ({ group, name, src: DECOR, frame, scale: 2, ...props }));
 
     const ITEMS = [
-      ...cells('Food', 'CatToys/CatBowls.png', 2, 16, ['Green bowl', 'Blue bowl', 'Purple bowl', 'Red bowl'], { kind: 'bowl', scale: 3 }),
-      ...cells('Food', 'CatToys/fish.png', 2, 16, ['Blue fish', 'Orange fish', 'Silver fish', 'Yellow fish'], { kind: 'fish', scale: 3 }),
-      ...cells('Food', 'CatToys/catfood.png', 1, 32, ['Bag of cat food'], { kind: 'bag', scale: 2 }),
+      ...cells('Food', 'food/bowls.png', 2, 16, ['Green bowl', 'Blue bowl', 'Purple bowl', 'Red bowl'], { kind: 'bowl', scale: 3 }),
+      ...cells('Food', 'food/fish.png', 2, 16, ['Blue fish', 'Orange fish', 'Silver fish', 'Yellow fish'], { kind: 'fish', scale: 3 }),
+      ...cells('Food', 'food/cat-food.png', 1, 32, ['Bag of cat food'], { kind: 'bag', scale: 2 }),
       ...['Blue', 'Orange', 'Pink'].map(c => ({
-        group: 'Toys', name: `${c} ball`, src: `${ITEM}CatToys/${c}Ball-Sheet.png`, kind: 'ball', scale: 4, frame: [0, 0, 24, 16] })),
-      { group: 'Toys', name: 'Toy mouse', src: ITEM + 'CatToys/Mouse-Sheet.png', kind: 'mouse', scale: 2, frame: [0, 0, 32, 32], frames: 4, stride: 42 },
-      { group: 'Toys', name: 'Feather wand', src: ITEM + 'CatToys/CatToy.png', kind: 'wand', scale: 3, frame: [0, 0, 32, 32], frames: 6 },
+        group: 'Toys', name: `${c} ball`, src: `${ITEM}toys/ball-${c.toLowerCase()}.png`, kind: 'ball', scale: 4, frame: [0, 0, 24, 16] })),
+      { group: 'Toys', name: 'Toy mouse', src: ITEM + 'toys/mouse.png', kind: 'mouse', scale: 2, frame: [0, 0, 32, 32], frames: 4, stride: 42 },
+      { group: 'Toys', name: 'Feather wand', src: ITEM + 'toys/feather-wand.png', kind: 'wand', scale: 3, frame: [0, 0, 32, 32], frames: 6 },
       ...['Blue', 'Brown', 'Green', 'Pink', 'Purple', 'Red'].flatMap(c =>
-        cells('Beds', `Beds/CatBed${c}.png`, 1, 64, [`${c} bed`], { kind: 'bed', scale: 3, seat: 7 })),
+        cells('Beds', `beds/bed-${c.toLowerCase()}.png`, 1, 64, [`${c} bed`], { kind: 'bed', scale: 3, seat: 7 })),
       // `seat` = how far above its feet (in sheet pixels) a cat lies in the bed.
       ...decor('Beds', { kind: 'bed', seat: 24 }, [
         ['Blue cushion', [202, 138, 110, 82]], ['Grey cushion', [329, 138, 110, 82]],
         ['Red cushion', [202, 236, 110, 82]], ['Olive cushion', [329, 236, 110, 82]],
         ['Purple cushion', [202, 326, 110, 82]], ['Teal cushion', [329, 326, 110, 82]],
       ]),
-      ...cells('Hideaways', 'Beds/CatHomes.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3 }),
-      ...cells('Hideaways', 'Beds/CatBoxes.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
+      ...cells('Hideaways', 'beds/houses.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3 }),
+      ...cells('Hideaways', 'beds/carriers.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
         'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3 }),
-      ...cells('Furniture', 'CatToys/toyss.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
+      ...cells('Furniture', 'furniture/scratching-posts.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
       ...decor('Furniture', { kind: 'post' }, [
         ['Peach scratching post', [191, 17, 64, 110]], ['Olive scratching post', [287, 16, 64, 110]],
         ['Slate scratching post', [383, 16, 64, 110]],
@@ -525,8 +520,8 @@
     const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS];
 
     // Fixed scenery, not in the bar: the cat tree that makes the play area.
-    // PlayGrounds/CatPlayGroundLighter.png is a paler version that also fits.
-    const PLAY_TREE = cells('Play area', 'PlayGrounds/CatPlayGround.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2 })[0];
+    // furniture/cat-tree-light.png is a paler version that also fits.
+    const PLAY_TREE = cells('Play area', 'furniture/cat-tree.png', 1, 128, ['Cat tree'], { kind: 'tree', scale: 2 })[0];
     // …and a cushion bed at the other end, for cats out there to nap in.
     const PLAY_BED = decor('Play area', { kind: 'bed', seat: 24 }, [['Play-area bed', [202, 138, 110, 82]]])[0];
     const SCENERY = [PLAY_TREE, PLAY_BED];
@@ -541,7 +536,7 @@
     // ------------------------------------------------------------------
     const ROOM_TYPES = ['Rose', 'Slate', 'Honey', 'Lilac', 'Sage', 'Teal', 'Pistachio', 'Stone',
       'Plum', 'Cocoa', 'Cloud', 'Sky', 'Periwinkle', 'Mint', 'Coral']
-      .map((name, i) => ({ name, src: `${ITEM}Rooms/Room${i + 1}.png` }));
+      .map((name, i) => ({ name, src: `assets/rooms/room-${String(i + 1).padStart(2, '0')}.png` }));
     const DEFAULT_ROOM = 0;
 
     // All room pictures share this layout, in picture pixels.
@@ -579,17 +574,17 @@
     // The Sky button can also pin one of them, or a plain dark backdrop.
     // `stars` is how starry it is (0 none, 1 full), for the twinkling stars.
     const SKIES = [
-      { name: 'Fajr', from: 4, src: 'backgrounds/fajrbackground.png', stars: 0 },          // before sunrise
-      { name: 'Dawn', from: 6, src: 'backgrounds/dawnbackground.png', stars: 0 },
-      { name: 'Noon', from: 9, src: 'backgrounds/noonbackground.png', stars: 0 },
-      { name: 'Sunset', from: 17, src: 'backgrounds/sunsetbackground.png', stars: 0.45 },
-      { name: 'Night', from: 20, src: 'backgrounds/nightbackgroundwithmoon.png', stars: 1 },
+      { name: 'Fajr', from: 4, src: 'assets/skies/fajr.png', stars: 0 },          // before sunrise
+      { name: 'Dawn', from: 6, src: 'assets/skies/dawn.png', stars: 0 },
+      { name: 'Noon', from: 9, src: 'assets/skies/noon.png', stars: 0 },
+      { name: 'Sunset', from: 17, src: 'assets/skies/sunset.png', stars: 0.45 },
+      { name: 'Night', from: 20, src: 'assets/skies/night.png', stars: 1 },
     ];
     const DARK_SKY = { name: 'Dark', src: '', stars: 1 };
     const DEFAULT_SKY = 0;                                 // Fajr
 
-    // Pixel effects: strips of square frames in effects/, made from the GIFs
-    // in "Pixel effects" by tools/build_effects.py. `at` is where they play on
+    // Pixel effects: strips of square frames in assets/effects/, made from
+    // the GIFs in source/effects/ by tools/build_effects.py. `at` is where they play on
     // whatever they're about: above its head, or over its middle.
     const EFFECTS = {
       hearts: { at: 'head' }, sparkle: { at: 'body' }, sleep: { at: 'head' }, smoke: { at: 'body' },
@@ -789,14 +784,14 @@
 
     async function loadArt() {
       const defs = [...CATALOG, ...SCENERY];
-      const urlsOf = d => d.kind === 'cat' ? Object.values(d.files).map(f => `sprite/${d.dir}${f}.png`) : [d.src];
-      const fxUrl = name => `effects/${name}.png`;
-      const urls = [...new Set([...defs.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl), 'ui/bubble.png'])];
+      const urlsOf = d => d.kind === 'cat' ? d.anims.map(anim => catUrl(d, anim)) : [d.src];
+      const fxUrl = name => `assets/effects/${name}.png`;
+      const urls = [...new Set([...defs.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl), 'assets/ui/bubble.png'])];
       // The name tags are drawn in the page's pixel font, so wait for it (but not forever, or if offline).
       const font = Promise.race([document.fonts.load('600 14px "Pixelify Sans"'), new Promise(r => setTimeout(r, 3000))]).catch(() => {});
       const [tex] = await Promise.all([PIXI.Assets.load(urls), font]);
       for (const url of urls) art[url] = tex[url].source.resource;
-      bubbleTexture = tex['ui/bubble.png'];
+      bubbleTexture = tex['assets/ui/bubble.png'];
       for (const [name, effect] of Object.entries(EFFECTS)) {
         const t = tex[fxUrl(name)];
         effect.textures = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height)).textures;
@@ -804,8 +799,8 @@
       for (const d of defs) {
         if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
         d.anim = {};
-        for (const [name, file] of Object.entries(d.files)) {
-          const t = tex[`sprite/${d.dir}${file}.png`];
+        for (const name of d.anims) {
+          const t = tex[catUrl(d, name)];
           d.anim[name] = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height));
         }
         d.look = d.anim.idle;
@@ -1766,10 +1761,10 @@
     const uiIcon = src => Object.assign(document.createElement('img'), { src, alt: '' });
     const frameIcon = (cat, anim) => thumb({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, fitScale({ look: cat.def.anim[anim] ?? cat.def.anim.idle }, 28));
     const MENU_ACTIONS = [
-      { label: 'Pet', icon: () => uiIcon('ui/paw.png'), run: pet },
-      { label: 'Feed', icon: () => uiIcon('ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (say(cat, 'No food?'), act(cat, 'sit', 2)) },
+      { label: 'Pet', icon: () => uiIcon('assets/ui/paw.png'), run: pet },
+      { label: 'Feed', icon: () => uiIcon('assets/ui/fish.png'), run: cat => pursue(cat, 'hunger', true) || (say(cat, 'No food?'), act(cat, 'sit', 2)) },
       { label: 'Play', icon: () => thumb(CATALOG.find(d => d.name === 'Blue ball'), 2), run: cat => pursue(cat, 'bored') || zoomies(cat) },
-      { label: 'Nap', icon: () => uiIcon('ui/sleeping-cat.png'), run: cat => pursue(cat, 'tired') },
+      { label: 'Nap', icon: () => uiIcon('assets/ui/sleeping-cat.png'), run: cat => pursue(cat, 'tired') },
       { label: 'Sit', icon: cat => frameIcon(cat, 'sit'), run: cat => act(cat, 'sit', rand(4, 6)) },
       { label: 'Zoomies', icon: cat => frameIcon(cat, 'run'), run: zoomies },
     ];
@@ -2076,7 +2071,7 @@
     // ------------------------------------------------------------------
     // Control bar
     // ------------------------------------------------------------------
-    const SIGN = { closed: 'ui/icon-plus.png', open: 'ui/icon-minus.png' };
+    const SIGN = { closed: 'assets/ui/icon-plus.png', open: 'assets/ui/icon-minus.png' };
 
     // A button that opens and closes a group of items.
     function makeToggle(name, label, def) {
@@ -2181,7 +2176,7 @@
     const MUSIC_MAX = 0.45;                               // full slider = this gain: music stays in the background
     const CATS_MAX = 0.9;
     const SOUND_KEY = 'cat-room-sound';
-    const sound = { music: false, song: SONGS[0].id, musicVolume: 0.5, cats: true, catsVolume: 0.6 };
+    const sound = { music: false, song: SONGS[0].id, musicVolume: 0.5, cats: true, catsVolume: 0.2 };
     let audio = null;                                     // { ctx, music, cats, player, buffers } once started
     let lastMeow = 0;
 
@@ -2216,7 +2211,7 @@
       ctx.createMediaElementSource(player).connect(music);
       audio = { ctx, music, cats, player, buffers: new Map() };
       for (const name of SOUNDS) {
-        fetch(`audio/sfx/${name}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
+        fetch(`assets/audio/sfx/${name}.mp3`).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
           .then(buffer => audio.buffers.set(name, buffer)).catch(() => {});
       }
       if (sound.music) playMusic();
@@ -2225,7 +2220,7 @@
     function playMusic() {
       if (!audio || document.hidden) return;
       const { player } = audio;
-      const src = `audio/music/${sound.song}.mp3`;
+      const src = `assets/audio/music/${sound.song}.mp3`;
       if (!player.src.endsWith(src)) player.src = src;
       player.play().then(() => glide(audio.music, sound.musicVolume * MUSIC_MAX, 2)).catch(() => {});
     }
@@ -2238,7 +2233,7 @@
       sound.song = id;
       if (!audio || !sound.music) return;
       glide(audio.music, 0, 0.4);
-      setTimeout(() => { audio.player.src = `audio/music/${id}.mp3`; playMusic(); }, 450);
+      setTimeout(() => { audio.player.src = `assets/audio/music/${id}.mp3`; playMusic(); }, 450);
     }
 
     // Play a cat sound. `rate` shifts the pitch (each cat has its own voice),
@@ -2342,10 +2337,17 @@
         saveSoundSettings();
       });
 
-      // Browsers only allow sound after the visitor does something.
-      const unlock = () => startAudio();
-      addEventListener('pointerdown', unlock, { once: true, capture: true });
-      addEventListener('keydown', unlock, { once: true, capture: true });
+      // Browsers only allow sound after the visitor does something, and for
+      // touch that's the finger lifting, not landing. Keep trying on each of
+      // these until the audio is actually running.
+      const UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+      const unlock = () => {
+        startAudio();
+        if (audio?.ctx.state === 'running') return done();
+        audio?.ctx.addEventListener('statechange', () => { if (audio.ctx.state === 'running') done(); }, { once: true });
+      };
+      const done = () => { for (const type of UNLOCK_EVENTS) removeEventListener(type, unlock, true); };
+      for (const type of UNLOCK_EVENTS) addEventListener(type, unlock, { capture: true, passive: true });
       // Quiet while the tab is hidden; carry on when it's back.
       document.addEventListener('visibilitychange', () => {
         if (!audio || !sound.music) return;
