@@ -28,13 +28,10 @@ PIECES = {
     'tile-sand': (1, 273, 14, 14),         # darker sand square, for "on"
     'nameplate': (230, 198, 66, 19),       # cat head + name bar
     'icon-plus': (321, 273, 14, 14),
-    'icon-check': (353, 273, 14, 14),
-    'icon-close': (321, 289, 14, 14),
     'icon-minus': (353, 289, 14, 14),
     'paw': (327, 153, 35, 30),
     'fish': (470, 195, 20, 11),
     'sleeping-cat': (466, 811, 43, 32),
-    'cat-bubble': (454, 616, 21, 18),
 }
 
 # The panel's inside, below the ears and within the outline, in panel pixels.
