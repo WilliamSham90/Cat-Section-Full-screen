@@ -310,6 +310,29 @@
     .volume input { flex: 1; accent-color: var(--cocoa); }
     #sound-button[data-music="off"] .waves { opacity: .25; }
 
+    /* ---- Hint shown while a wall object is selected ---- */
+    .wall-hint {
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      translate: -50% 0;
+      z-index: 5;
+      margin: 0;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgb(64 57 57 / .85);
+      color: var(--cream);
+      font-size: 13px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .wall-hint[hidden] { display: none; }
+    .wall-hint .touch { display: none; }
+    @media (pointer: coarse) {
+      .wall-hint .keys { display: none; }
+      .wall-hint .touch { display: inline; }
+    }
+
     /* ---- Signature, on a cat name plate ---- */
     .signature {
       position: fixed;
@@ -382,7 +405,12 @@
       </div>
     </div>
   </header>
-  <main id="scene"></main>
+  <main id="scene">
+    <p id="wall-hint" class="wall-hint" role="status" hidden>
+      <span class="keys">← → ↑ ↓ move it along the wall · Delete removes it · Esc when done</span>
+      <span class="touch">Drag it along the wall · drop it on the trash to remove it</span>
+    </p>
+  </main>
   <a class="signature nameplate" href="https://williamsham90.github.io/Portfolio/" target="_blank" rel="noopener">
     <span>Made by</span> <span class="name">William Sham</span><span class="visually-hidden"> (portfolio, opens in a new tab)</span>
   </a>
@@ -499,25 +527,28 @@
         ['Red cushion', [202, 236, 110, 82]], ['Olive cushion', [329, 236, 110, 82]],
         ['Purple cushion', [202, 326, 110, 82]], ['Teal cushion', [329, 326, 110, 82]],
       ]),
-      ...cells('Hideaways', 'beds/houses.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3 }),
+      ...cells('Hideaways', 'beds/houses.png', 2, 63, ['Blue house', 'Green house', 'Purple house', 'Orange house'], { kind: 'hideout', scale: 3, solid: true }),
       ...cells('Hideaways', 'beds/carriers.png', 4, 64, ['Brown carrier', 'Purple carrier', 'Orange carrier', 'Red carrier',
-        'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3 }),
-      ...cells('Furniture', 'furniture/scratching-posts.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3 }),
-      ...decor('Furniture', { kind: 'post' }, [
+        'Green carrier', 'Blue carrier', 'Black carrier', 'Navy carrier'], { kind: 'hideout', scale: 3, solid: true }),
+      ...cells('Furniture', 'furniture/scratching-posts.png', 2, 64, ['Green scratcher', 'Blue scratcher', 'Purple scratcher', 'Red scratcher'], { kind: 'post', scale: 3, solid: true }),
+      ...decor('Furniture', { kind: 'post', solid: true }, [
         ['Peach scratching post', [191, 17, 64, 110]], ['Olive scratching post', [287, 16, 64, 110]],
         ['Slate scratching post', [383, 16, 64, 110]],
       ]),
-      // Plants are just for looks: cats walk around them.
-      ...decor('Decor', { kind: 'decor' }, [
+      // Plants are just for looks; cats walk around the big ones.
+      ...decor('Decor', { kind: 'decor', solid: true }, [
         ['Fig in a brown pot', [140, 299, 45, 108]], ['Fig in a navy pot', [140, 421, 45, 108]],
         ['Fig in a pink pot', [138, 552, 45, 108]], ['Fig in a blue pot', [138, 685, 45, 108]],
+      ]),
+      ...decor('Decor', { kind: 'decor' }, [
         ['Pink pot plant', [132, 193, 23, 29]], ['Grey pot plant', [164, 193, 23, 29]],
         ['Cream pot plant', [132, 226, 23, 29]], ['Mint pot plant', [164, 226, 23, 29]],
         ['Yellow pot plant', [132, 258, 23, 29]], ['Blue pot plant', [164, 258, 23, 29]],
       ]),
       // Shelves and tables: cats jump up on them. `perches` are the spots
-      // they sit on, in the picture's pixels [x, y].
-      ...decor('Decor', { kind: 'perch', perches: [[52, 26]] }, [
+      // they sit on, in the picture's pixels [x, y]. Cats walk round
+      // shelves (`solid`) but straight under tables.
+      ...decor('Decor', { kind: 'perch', perches: [[52, 26]], solid: true }, [
         ['Peach shelf', [14, 289, 100, 127]], ['Blue shelf', [12, 416, 100, 128]],
         ['Green shelf', [9, 544, 100, 128]], ['Purple shelf', [7, 673, 100, 127]],
         ['Wooden shelf', [7, 801, 100, 127]],
@@ -528,7 +559,41 @@
         ['Lilac table', [930, 610, 61, 61]],
       ]),
     ];
-    const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS];
+    // Wall objects: windows and pictures for the two back walls. Each picture
+    // is drawn leaning one way, so it belongs on one wall. `sill` is the
+    // bottom edge of a window's glass, in the picture's pixels; light comes
+    // in there. Windows with blinds throw striped light.
+    const CURTAINS = { sill: [[9, 130], [76, 93]] }, BLINDS = { sill: [[9, 85], [60, 112]], blinds: true }, PANES = { sill: [[14, 55], [49, 74]] };
+    const onWall = (wall, props, list) => decor('Wall', { kind: 'wall', wall, ...props }, list);
+    const WALL_ITEMS = [
+      ...onWall('left', CURTAINS, [
+        ['Window, peach curtains', [674, 306, 93, 139]], ['Window, red curtains', [770, 301, 93, 139]],
+        ['Window, blue curtains', [866, 299, 93, 139]],
+      ]),
+      ...onWall('right', BLINDS, [
+        ['Window, lilac blinds', [864, 3, 64, 123]], ['Window, black blinds', [928, 4, 64, 123]],
+        ['Window, teal blinds', [864, 129, 64, 123]], ['Window, white blinds', [928, 130, 64, 123]],
+      ]),
+      ...onWall('right', PANES, [
+        ['Cream window', [19, 1, 61, 95]], ['Mauve window', [115, 1, 61, 95]],
+        ['Grey window', [19, 97, 61, 95]], ['Brown window', [115, 97, 61, 95]],
+      ]),
+      ...onWall('left', {}, [['Painting', [79, 226, 38, 62]], ['Air vent', [12, 226, 41, 63]]]),
+      ...onWall('right', {}, [
+        ['Plant poster', [714, 196, 39, 89]],
+        ['Cat portrait, cream', [452, 200, 25, 46]], ['Cat portrait, blue', [484, 201, 25, 46]],
+        ['Cat portrait, white', [515, 200, 25, 46]], ['Cat portrait, teal', [452, 264, 25, 46]],
+        ['Cat portrait, snow', [484, 265, 25, 46]], ['Cat portrait, lilac', [515, 264, 25, 46]],
+      ]),
+      ...onWall('left', {}, [
+        ['Heart frame, brown', [456, 320, 17, 32]], ['Heart frame, grey', [487, 320, 17, 32]],
+        ['Heart frame, blue', [519, 320, 17, 32]], ['Heart frame, olive', [455, 352, 17, 32]],
+        ['Heart frame, white', [487, 352, 17, 32]], ['Heart frame, purple', [520, 352, 17, 32]],
+        ['Heart frame, pink', [455, 384, 17, 32]], ['Heart frame, yellow', [488, 384, 17, 32]],
+        ['Heart frame, green', [520, 384, 17, 32]],
+      ]),
+    ];
+    const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS, ...WALL_ITEMS];
 
     // Fixed scenery, not in the bar: the cat tree that makes the play area.
     // furniture/cat-tree-light.png is a paler version that also fits.
@@ -541,9 +606,8 @@
 
 
     // ------------------------------------------------------------------
-    // Room – one of the isometric room pictures, given a wooden floor and
-    // decorated from the decorations sheet. The room types differ in wall
-    // colour; each also picks its own curtains, blinds and portrait.
+    // Room – one of the isometric room pictures, given a wooden floor. The
+    // room types differ in wall colour; what hangs on the walls is up to you.
     // ------------------------------------------------------------------
     const ROOM_TYPES = ['Rose', 'Slate', 'Honey', 'Lilac', 'Sage', 'Teal', 'Pistachio', 'Stone',
       'Plum', 'Cocoa', 'Cloud', 'Sky', 'Periwinkle', 'Mint', 'Coral']
@@ -558,26 +622,16 @@
       base: 2,                                         // catalogue scales assume the room drawn at 2×
     };
 
-    // Light through the windows, in picture pixels: `sill` is the bottom
-    // edge of the glass, `patch` the bright shape on the floor (the two
-    // points under the sill, then the two far ones). The window with blinds
-    // throws stripes.
-    const WINDOW_LIGHT = [
-      { sill: [[76, 271], [153, 234]], patch: [[92, 306], [169, 265], [259, 310], [182, 351]] },
-      { sill: [[288, 190], [348, 216]], patch: [[272, 225], [332, 256], [252, 296], [192, 265]], stripes: 5 },
-    ];
-
-    // Hung on the walls: `at` is the top-left corner in picture pixels; room
-    // type i uses frames[i % frames.length]. The sheet draws each piece for
-    // one wall: curtains, the air vent and the painting face the left wall,
-    // blinds and portraits the right.
-    const WALL_DECOR = [
-      { at: [70, 140], frames: [[674, 306, 93, 139], [770, 301, 93, 139], [866, 299, 93, 139]] },   // curtained window
-      { at: [190, 130], frames: [[79, 226, 38, 62]] },                                                // painting
-      { at: [285, 95], frames: [[864, 3, 64, 123], [928, 4, 64, 123], [864, 129, 64, 123], [928, 130, 64, 123]] },  // window with blinds
-      { at: [375, 140], frames: [[714, 196, 39, 89]] },                                               // plant poster
-      { at: [430, 175], frames: [[452, 200, 25, 46], [484, 201, 25, 46], [515, 200, 25, 46],
-                                 [452, 264, 25, 46], [484, 265, 25, 46], [515, 264, 25, 46]] },        // cat portrait
+    // The two back walls, in picture pixels: how far along they reach, how
+    // they slope, and their top edge and floor line at any x.
+    const WALLS = {
+      left: { x0: 32, x1: 252, slope: -0.535, top: x => 162 - 0.535 * (x - 30), base: x => 318 - 0.535 * (x - 39), into: [2, 1] },
+      right: { x0: 262, x1: 488, slope: 0.535, top: x => 43 + 0.535 * (x - 262), base: x => 201 + 0.535 * (x - 262), into: [-2, 1] },
+    };
+    // What hangs on the walls at first: name and top-left corner in picture pixels.
+    const START_WALL = [
+      ['Window, peach curtains', 70, 140], ['Painting', 170, 140], ['Window, lilac blinds', 285, 95],
+      ['Plant poster', 375, 140], ['Cat portrait, cream', 430, 175],
     ];
 
     // Floorboards, in picture pixels: plank colours (picked per board), the
@@ -622,7 +676,7 @@
     const START = [
       ['Cream cat', .5, .55], ['Blue bowl', .3, .42], ['Blue bed', .72, .45],
       ['Blue ball', .42, .72], ['Green scratcher', .6, .3], ['Toy mouse', .3, .62],
-      ['Fig in a brown pot', .44, .12], ['Cream table', .18, .58],
+      ['Fig in a brown pot', .47, .12], ['Cream table', .18, .58],
     ];
 
     // ------------------------------------------------------------------
@@ -736,17 +790,13 @@
       ctx.putImageData(pic, 0, 0);
     }
 
-    // The full picture for room type i: wooden floor, then the wall decorations.
+    // The picture for room type i, with its wooden floor.
     function buildRoom(i) {
       const img = art[ROOM_TYPES[i].src];
       const canvas = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(img, 0, 0);
       layFloor(ctx, img.width, img.height);
-      for (const { at: [x, y], frames } of WALL_DECOR) {
-        const [fx, fy, fw, fh] = frames[i % frames.length];
-        ctx.drawImage(art[DECOR], fx, fy, fw, fh, x, y, fw, fh);
-      }
       return canvas;
     }
 
@@ -837,6 +887,7 @@
     // in front.
     const entities = [];
     const room = new PIXI.Sprite();
+    const wallLayer = new PIXI.Container();               // wall objects, in room picture pixels
     const windowLight = new PIXI.Graphics({ blendMode: 'add' });   // drawn in room picture pixels
     const ground = new PIXI.Graphics();                  // the play area's strip
     const shadows = new PIXI.Container();
@@ -846,7 +897,7 @@
     const talk = new PIXI.Container();                   // speech bubbles
     const starLayer = new PIXI.Container();              // twinkling stars (see Stars)
     const shooter = new PIXI.Graphics();                 // the shooting star
-    app.stage.addChild(starLayer, shooter, room, windowLight, ground, shadows, world, labels, fx, talk);
+    app.stage.addChild(starLayer, shooter, room, wallLayer, windowLight, ground, shadows, world, labels, fx, talk);
     const shadowShape = new PIXI.GraphicsContext().ellipse(0, 0, 1, 0.3).fill({ color: 0x000000, alpha: 0.25 });
     const HAS_SHADOW = new Set(['cat', 'ball', 'mouse']);
 
@@ -919,8 +970,10 @@
       Object.assign(yard, next);
       room.position.set(x, y);
       room.scale.set(k);
-      windowLight.position.set(x, y);
-      windowLight.scale.set(k);
+      for (const layer of [wallLayer, windowLight]) {
+        layer.position.set(x, y);
+        layer.scale.set(k);
+      }
       ground.clear()
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).fill({ color: 0xf6e8d6, alpha: 0.35 })
         .roundRect(4, yard.y0 - 18, width - 8, height - yard.y0 + 14, 12).stroke({ color: 0x403939, alpha: 0.25, width: 2 });
@@ -995,6 +1048,13 @@
       sprite.anchor.copyFrom(def.look.anchor);
       sprite.eventMode = 'static';
       sprite.cursor = fixed ? 'pointer' : 'grab';
+      if (def.kind !== 'cat') {
+        // Only the visible part is clickable, so a plant's empty corners
+        // don't hide what's behind it. (Cats change shape as they move, so
+        // they keep their whole frame.)
+        const [cx, cy, cw, ch] = def.look.crop, [fx, fy, fw, fh] = def.frame;
+        sprite.hitArea = new PIXI.Rectangle(cx - fx - sprite.anchor.x * fw, cy - fy - sprite.anchor.y * fh, cw, ch);
+      }
       const e = { def, kind: def.kind, sprite, x, y, zone, fixed, lift: 0, z: 0, vx: 0, vy: 0,
                   dir: def.kind === 'cat' && Math.random() < 0.5 ? -1 : 1 };
       sprite.on('pointerdown', ev => startDrag({ e }, ev));
@@ -1257,6 +1317,7 @@
       cat.sprite.textures = a.textures;
       cat.sprite.anchor.copyFrom(a.anchor);
       cat.sprite.animationSpeed = ANIM_SPEED[name];
+      cat.sprite.loop = true;
       cat.sprite.gotoAndPlay(0);
     }
 
@@ -1265,11 +1326,20 @@
       play(cat, anim);
     }
 
+    // Like act(), but the animation plays exactly once over `time`, so a
+    // jump takes off and lands in step with the movement.
+    function actOnce(cat, anim, time, next = null, tick = null) {
+      act(cat, anim, time, next, tick);
+      cat.sprite.loop = false;
+      cat.sprite.animationSpeed = cat.sprite.totalFrames / (time * 60);
+    }
+
     // Run to (x, y), or after `follow` if given, then do `next`. `rush`
     // scales the cat's speed (zoomies, chasing).
     function goTo(cat, x, y, next = null, follow = null, rush = 1) {
-      const to = stand(cat, x, y);
-      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y });
+      const to = clearSpot(cat, stand(cat, x, y));
+      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y, reroute: 0.5 });
+      cat.route = route(cat, follow ? follow.x : to.x, follow ? follow.y : to.y);
       if (cat.anim !== 'run') play(cat, 'run');
     }
 
@@ -1301,7 +1371,7 @@
       [cat => perchesFor(cat).length ? 2 : 0, cat => use(cat, pick(perchesFor(cat)))],
       [cat => 1 + cat.needs.bored * 3, zoomies],
       [cat => entities.some(c => c !== cat && free(c) && c.zone === cat.zone) ? 1.5 : 0, tag],
-      [1, cat => act(cat, cat.def.anim.happy && Math.random() < 0.5 ? 'happy' : 'jump', 0.9)],
+      [1, cat => cat.def.anim.happy && Math.random() < 0.5 ? act(cat, 'happy', 1.2) : actOnce(cat, 'jump', 0.9)],
     ];
     function pickWeighted(list, cat) {
       const weights = list.map(([w]) => (typeof w === 'function' ? w(cat) : w));
@@ -1411,9 +1481,9 @@
     function climb(cat, item) {
       const height = (item.def.look.foot.y - cat.perch[1]) * item.s;
       const rise = speed => dt => { cat.lift = clampTo(cat.lift + speed * dt, 0, height); };
-      const down = () => act(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
+      const down = () => actOnce(cat, 'jump', 0.5, () => { cat.lift = 0; }, rise(-height / 0.5));
       const sleepy = cat.needs.tired > URGENT;
-      act(cat, 'jump', 0.5, () => {
+      actOnce(cat, 'jump', 0.5, () => {
         if (sleepy) return act(cat, 'sleep', rand(6, 10), () => { cat.needs.tired = 0; down(); });
         act(cat, 'sit', rand(4, 7), () => {
           relieve(cat, 'bored', 0.4);
@@ -1425,7 +1495,7 @@
 
     function kick(cat, ball) {
       face(cat, ball);
-      if (held(ball)) return act(cat, 'jump', 1);          // swat at the ball you're dangling
+      if (held(ball)) return actOnce(cat, 'jump', 1);      // swat at the ball you're dangling
       const a = Math.atan2(ball.y - cat.y, ball.x - cat.x) + rand(-0.6, 0.6);
       const v = rand(350, 600) * unit();
       ball.vx = Math.cos(a) * v;
@@ -1439,7 +1509,7 @@
     // `hungry`: the cat was hunting for food, so it eats the mouse after.
     function pounce(cat, mouse, hungry = false) {
       face(cat, mouse);
-      if (held(mouse) || mouse.dying) return act(cat, 'jump', 1);
+      if (held(mouse) || mouse.dying) return actOnce(cat, 'jump', 1);
       effectAt('pounce', mouse.x, mouse.y - mouse.tall / 2);
       relieve(cat, 'bored', 0.6);
       kill(mouse);
@@ -1487,7 +1557,7 @@
       if (asleep) {
         emote(cat, '❗');
         say(cat, 'Hmph!');
-        return act(cat, 'jump', 0.8);
+        return actOnce(cat, 'jump', 0.8);
       }
       emote(cat, '❤️');
       say(cat, 'Purr~');
@@ -1507,7 +1577,14 @@
       } else if (cat.mode === 'move') {
         const t = cat.follow;
         if (t?.dead || (t && held(t)) || cat.time <= 0) return think(cat);   // target gone, or gave up
-        if (moveCat(cat, t ? t.x : cat.tx, t ? t.y : cat.ty, t ? t.half + cat.half * 0.6 : 0, dt)) return;
+        const gx = t ? t.x : cat.tx, gy = t ? t.y : cat.ty;
+        if (t && (cat.reroute -= dt) <= 0) { cat.reroute = 0.5; cat.route = route(cat, gx, gy); }   // it moves
+        const corner = cat.route?.[0];
+        if (corner) {                                     // on the way round something
+          if (!moveCat(cat, corner.x, corner.y, 0, dt, false)) cat.route.shift();
+          return;
+        }
+        if (moveCat(cat, gx, gy, t ? t.half + cat.half * 0.6 : 0, dt)) return;
         if (!t) { cat.x = cat.tx; cat.y = cat.ty; }
       }
       // Done: run the follow-up, or work out what to do next.
@@ -1519,14 +1596,18 @@
 
     // One step towards (tx, ty), stopping `reach` short. The cat speeds up,
     // turns and brakes smoothly rather than snapping to full speed. Returns
-    // false once it has arrived.
-    function moveCat(cat, tx, ty, reach, dt) {
+    // false once it has arrived. `final` = false for a corner on the way:
+    // no braking, and it keeps its speed into the turn.
+    function moveCat(cat, tx, ty, reach, dt, final = true) {
       const u = unit();
       const dx = tx - cat.x, dy = ty - cat.y, dist = Math.hypot(dx, dy);
       const left = dist - reach;
-      if (left <= 3 * u) { cat.vx = cat.vy = 0; return false; }
+      if (left <= (final ? 3 : 8) * u) {
+        if (final) cat.vx = cat.vy = 0;
+        return false;
+      }
 
-      if (cat.follow?.kind === 'mouse') {
+      if (final && cat.follow?.kind === 'mouse') {
         if (!cat.leaping && left < LEAP * u) {                                // pounce from a distance
           Object.assign(cat, { leaping: true, rush: 2.6 });
           play(cat, 'jump');
@@ -1536,7 +1617,7 @@
         }
       }
       const top = cat.speed * cat.rush * u;
-      const want = Math.min(top, Math.sqrt(2 * ACCEL * u * left));            // brake in time to stop
+      const want = final ? Math.min(top, Math.sqrt(2 * ACCEL * u * left)) : top;   // brake in time to stop
       const k = Math.min(1, TURN * dt);
       cat.vx += ((dx / dist) * want - cat.vx) * k;
       cat.vy += ((dy / dist) * want - cat.vy) * k;
@@ -1544,7 +1625,7 @@
       if (step >= left) {
         cat.x += (dx / dist) * left;
         cat.y += (dy / dist) * left;
-        cat.vx = cat.vy = 0;
+        if (final) cat.vx = cat.vy = 0;
         return false;
       }
       cat.x += cat.vx * dt;
@@ -1554,6 +1635,158 @@
         cat.sprite.animationSpeed = ANIM_SPEED.run * clampTo(Math.hypot(cat.vx, cat.vy) / (300 * u), 0.5, 1.8);
       }
       return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Getting around – cats walk round big furniture (anything `solid`:
+    // shelves, big plants, houses, carriers, scratching posts) instead of
+    // through it. The floor is the square |p|, |q| ≤ 1 (see floorBox), so it
+    // maps onto a grid: A* finds a route between free cells, and the route
+    // is pulled straight wherever the way is clear.
+    // ------------------------------------------------------------------
+    const GRID = 32;
+    const CELL = 2 / GRID;
+    const cellOf = v => clampTo(Math.floor((v + 1) / CELL), 0, GRID - 1);
+    const cellMid = i => -1 + (i + 0.5) * CELL;
+
+    // Cells this cat can't walk through. Each solid thing stands on an iso
+    // diamond just behind its feet, which is a square in floor coordinates;
+    // it's grown by the cat's own size. What the cat is heading for doesn't count.
+    function blockedFor(cat) {
+      const f = floorBox(), grid = new Uint8Array(GRID * GRID);
+      const pad = (cat.half * 0.5) / f.rx;
+      for (const e of entities) {
+        if (!e.def.solid || e.zone !== 'room' || e === cat.using || held(e)) continue;
+        const r = (e.half * 0.8) / f.rx + pad;
+        const [p, q] = toFloor(f, e.x, e.y - e.half * 0.4);
+        for (let i = cellOf(p - r); i <= cellOf(p + r); i++) {
+          for (let j = cellOf(q - r); j <= cellOf(q + r); j++) {
+            if (Math.abs(cellMid(i) - p) <= r && Math.abs(cellMid(j) - q) <= r) grid[i * GRID + j] = 1;
+          }
+        }
+      }
+      return grid;
+    }
+
+    // Is the straight line between floor points a and b clear?
+    function clearLine(grid, a, b) {
+      const steps = Math.ceil(Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) / (CELL / 2)) + 1;
+      for (let s = 1; s < steps; s++) {
+        const t = s / steps;
+        if (grid[cellOf(a[0] + (b[0] - a[0]) * t) * GRID + cellOf(a[1] + (b[1] - a[1]) * t)]) return false;
+      }
+      return true;
+    }
+
+    // The free cell nearest to cell (i, j), searching outwards.
+    function nearestFree(grid, i, j) {
+      for (let r = 0; r < GRID; r++) {
+        for (let di = -r; di <= r; di++) {
+          for (let dj = -r; dj <= r; dj++) {
+            if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+            const a = i + di, b = j + dj;
+            if (a >= 0 && b >= 0 && a < GRID && b < GRID && !grid[a * GRID + b]) return [a, b];
+          }
+        }
+      }
+      return null;
+    }
+
+    // If (x, y) is inside furniture, the nearest spot that isn't.
+    function clearSpot(cat, at) {
+      if (cat.zone !== 'room') return at;
+      const f = floorBox(), grid = blockedFor(cat), [p, q] = toFloor(f, at.x, at.y);
+      if (!grid[cellOf(p) * GRID + cellOf(q)]) return at;
+      const c = nearestFree(grid, cellOf(p), cellOf(q));
+      if (!c) return at;
+      const [x, y] = fromFloor(f, cellMid(c[0]), cellMid(c[1]));
+      return { x, y };
+    }
+
+    // A* over the grid (8 directions, no squeezing between diagonal corners).
+    function aStar(grid, start, goal) {
+      const n = GRID * GRID, g = new Float32Array(n).fill(Infinity), from = new Int32Array(n).fill(-1);
+      const open = [], closed = new Uint8Array(n);
+      const h = i => {
+        const dx = Math.abs(((i / GRID) | 0) - ((goal / GRID) | 0)), dy = Math.abs((i % GRID) - (goal % GRID));
+        return Math.max(dx, dy) + 0.414 * Math.min(dx, dy);
+      };
+      const push = (i, f) => {                            // binary heap on f
+        open.push([f, i]);
+        for (let k = open.length - 1; k > 0;) {
+          const up = (k - 1) >> 1;
+          if (open[up][0] <= open[k][0]) break;
+          [open[up], open[k]] = [open[k], open[up]];
+          k = up;
+        }
+      };
+      const pop = () => {
+        const top = open[0], last = open.pop();
+        if (open.length) {
+          open[0] = last;
+          for (let k = 0; ;) {
+            const l = 2 * k + 1, r = l + 1;
+            let m = k;
+            if (l < open.length && open[l][0] < open[m][0]) m = l;
+            if (r < open.length && open[r][0] < open[m][0]) m = r;
+            if (m === k) break;
+            [open[m], open[k]] = [open[k], open[m]];
+            k = m;
+          }
+        }
+        return top[1];
+      };
+      g[start] = 0;
+      push(start, h(start));
+      while (open.length) {
+        const cur = pop();
+        if (cur === goal) break;
+        if (closed[cur]) continue;
+        closed[cur] = 1;
+        const ci = (cur / GRID) | 0, cj = cur % GRID;
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            if (!di && !dj) continue;
+            const ni = ci + di, nj = cj + dj;
+            if (ni < 0 || nj < 0 || ni >= GRID || nj >= GRID) continue;
+            const nb = ni * GRID + nj;
+            if (grid[nb] || closed[nb]) continue;
+            if (di && dj && (grid[ci * GRID + nj] || grid[ni * GRID + cj])) continue;
+            const cost = g[cur] + (di && dj ? 1.414 : 1);
+            if (cost < g[nb]) { g[nb] = cost; from[nb] = cur; push(nb, cost + h(nb)); }
+          }
+        }
+      }
+      if (from[goal] < 0 && goal !== start) return null;
+      const cells = [];
+      for (let c = goal; c >= 0; c = from[c]) cells.unshift(c);
+      return cells;
+    }
+
+    // The corners a cat in the room passes on its way to (tx, ty), in
+    // screen points (not including (tx, ty) itself). Empty when the way is clear.
+    function route(cat, tx, ty) {
+      if (cat.zone !== 'room') return [];
+      const f = floorBox(), grid = blockedFor(cat);
+      const a = toFloor(f, cat.x, cat.y), b = toFloor(f, tx, ty);
+      if (clearLine(grid, a, b)) return [];
+      const s = nearestFree(grid, cellOf(a[0]), cellOf(a[1])), e = nearestFree(grid, cellOf(b[0]), cellOf(b[1]));
+      if (!s || !e) return [];
+      const cells = aStar(grid, s[0] * GRID + s[1], e[0] * GRID + e[1]);
+      if (!cells) return [];
+      const pts = [...cells.map(c => [cellMid((c / GRID) | 0), cellMid(c % GRID)]), b];
+      // Pull the route straight: from each point, jump to the furthest one in clear view.
+      const corners = [];
+      for (let at = a, i = 0; i < pts.length - 1;) {
+        let k = i;
+        for (let j = pts.length - 1; j > i; j--) if (clearLine(grid, at, pts[j])) { k = j; break; }
+        if (k === pts.length - 1) break;
+        if (k === i) k = i + 1;                           // boxed in: take the next step anyway
+        at = pts[k];
+        corners.push(at);
+        i = k;
+      }
+      return corners.map(([p, q]) => { const [x, y] = fromFloor(f, p, q); return { x, y }; });
     }
 
     // ------------------------------------------------------------------
@@ -1703,6 +1936,7 @@
     function startDrag(target, ev) {
       if (drag || ev.button !== 0) return;
       if (target.e?.dying) return;
+      if (!target.w) selectWall(null);
       drag = { ...target, id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, moved: false };
       dragMoved = false;
       addEventListener('pointermove', onDragMove);
@@ -1720,6 +1954,13 @@
         drag.gw = def.look.crop[2] * k;
         drag.gh = def.look.crop[3] * k;
         document.body.appendChild(drag.ghost);
+        return;
+      }
+      if (drag.w) {
+        const w = drag.w, p = toRoom(drag.sx, drag.sy);
+        Object.assign(drag, { ox: w.x - p.x, oy: w.y - p.y, homeX: w.x, homeY: w.y });
+        selectWall(w);
+        wallLayer.addChild(w.sprite);                       // in front of the other wall objects
         return;
       }
       if (e.fixed) return;                                  // scenery stays put
@@ -1744,7 +1985,13 @@
         drag.moved = dragMoved = true;
         pickUp();
       }
-      if (drag.e) {
+      if (drag.w) {
+        const p = toRoom(ev.clientX, ev.clientY);
+        Object.assign(drag.w, { x: p.x + drag.ox, y: p.y + drag.oy });
+        fitOnWall(drag.w);
+        drawLight();
+        trashEl.classList.toggle('armed', isOver(trashEl, ev));
+      } else if (drag.e) {
         if (drag.e.fixed) return;
         const p = toWorld(ev.clientX, ev.clientY);
         if (drag.e.kind === 'cat') drag.e.zone = zoneAt(p);
@@ -1756,7 +2003,7 @@
         binning ? hideDrop() : markDrop(drag.e.x, drag.e.y, drag.e.half);
       } else {
         drag.ghost.style.transform = `translate(${ev.clientX - drag.gw / 2}px, ${ev.clientY - drag.gh}px)`;
-        if (!isOver(sceneEl, ev)) return hideDrop();
+        if (!isOver(sceneEl, ev) || drag.def.kind === 'wall') return hideDrop();
         // Where it would land: the same spot spawn() will put it.
         const p = toWorld(ev.clientX, ev.clientY), def = drag.def;
         const half = (def.look.crop[2] * sizeOf(def)) / 2;
@@ -1776,10 +2023,28 @@
       document.body.classList.remove('dragging');
       trashEl.classList.remove('armed');
       hideDrop();
-      const { e, def, moved, ghost, homeX, homeY, homeZone } = drag;
+      const { e, w, def, moved, ghost, homeX, homeY, homeZone } = drag;
       drag = null;
       ghost?.remove();
       const cancelled = ev.type === 'pointercancel';
+
+      if (w) {                                              // a wall object
+        if (!moved) return selectWall(w);
+        if (!cancelled && isOver(trashEl, ev)) {
+          Object.assign(w, { x: homeX, y: homeY });
+          fitOnWall(w);
+          drawLight();
+          confirmDeleteWall(w);
+        }
+        return;
+      }
+      if (def?.kind === 'wall') {                           // a new wall object from the bar
+        if (!cancelled && isOver(sceneEl, ev)) {
+          const p = toRoom(ev.clientX, ev.clientY), [, , width, height] = def.frame;
+          selectWall(addWall(def, p.x - width / 2, p.y - height));
+        }
+        return;
+      }
 
       if (!moved) {
         if (e && !cancelled) e.kind === 'cat' ? openMenu(e) : clickItem(e);
@@ -1804,6 +2069,113 @@
         if (e.zone !== homeZone) say(e, e.zone === 'yard' ? 'Wheee!' : 'Home!');
         act(e, 'sit', 0.8);
       }
+    }
+
+    // ------------------------------------------------------------------
+    // Wall objects – windows and pictures on the back walls. Each one
+    // slides along its own wall: drag it, or click it and use the arrow
+    // keys (Shift for bigger steps). Delete or the trash removes it. Kept
+    // in room picture pixels (x, y = top-left), so they move with the room.
+    // ------------------------------------------------------------------
+    const walls = [];
+    let selectedWall = null;
+    const wallMark = new PIXI.Graphics({ visible: false });   // outline round the selected one
+    const wallHint = document.getElementById('wall-hint');
+    const WALL_STEP = 2, WALL_BIG_STEP = 8;              // picture pixels per arrow press
+
+    const toRoom = (clientX, clientY) => {
+      const p = toWorld(clientX, clientY);
+      return { x: (p.x - view.x) / view.k, y: (p.y - view.y) / view.k };
+    };
+
+    // Keep a wall object on its wall: within its ends, below its top edge
+    // and above the floor line. Pictures lean with the wall, so the low
+    // corner and the high corner are on opposite sides.
+    function fitOnWall(w) {
+      const W = WALLS[w.def.wall], [, , width, height] = w.def.frame;
+      w.x = clampTo(w.x, W.x0, W.x1 - width);
+      const low = W.slope < 0 ? w.x : w.x + width, high = W.slope < 0 ? w.x + width : w.x;
+      const yMin = W.top(high) + 2, yMax = W.base(low) - height - 2;
+      w.y = clampTo(w.y, yMin, Math.max(yMin, yMax));
+      w.sprite.position.set(Math.round(w.x), Math.round(w.y));
+      if (w === selectedWall) markWall();
+    }
+
+    // Hang a wall object; without a position it goes in the middle of its wall.
+    function addWall(def, x, y) {
+      const W = WALLS[def.wall], [, , width, height] = def.frame;
+      x ??= (W.x0 + W.x1 - width) / 2;
+      y ??= (W.top(x + width / 2) + W.base(x + width / 2)) / 2 - height / 2;
+      const sprite = new PIXI.Sprite(def.look.textures[0]);
+      sprite.eventMode = 'static';
+      sprite.cursor = 'grab';
+      const w = { def, x, y, sprite };
+      sprite.on('pointerdown', ev => startDrag({ w }, ev));
+      wallLayer.addChild(sprite);
+      walls.push(w);
+      fitOnWall(w);
+      drawLight();
+      return w;
+    }
+
+    function removeWall(w) {
+      const i = walls.indexOf(w);
+      if (i < 0) return;
+      if (w === selectedWall) selectWall(null);
+      walls.splice(i, 1);
+      const [, , width, height] = w.def.frame;
+      effectAt('smoke', view.x + (w.x + width / 2) * view.k, view.y + (w.y + height / 2) * view.k);
+      w.sprite.destroy();
+      drawLight();
+    }
+
+    function nudgeWall(w, dx, dy) {
+      w.x += dx;
+      w.y += dx * WALLS[w.def.wall].slope + dy;          // along the wall, not straight across
+      fitOnWall(w);
+      drawLight();
+    }
+
+    function markWall() {
+      const w = selectedWall, [, , width, height] = w.def.frame;
+      wallMark.clear().rect(w.x - 2, w.y - 2, width + 4, height + 4).stroke({ color: 0xf6e8d6, width: 1.5 });
+      wallLayer.addChild(wallMark);                      // keep it on top
+      wallMark.visible = true;
+    }
+
+    function selectWall(w) {
+      selectedWall = w;
+      wallHint.hidden = !w;
+      if (w) markWall();
+      else wallMark.visible = false;
+    }
+
+    async function confirmDeleteWall(w) {
+      const name = Object.assign(document.createElement('strong'), { textContent: w.def.name });
+      const yes = await ask({ pic: thumb(w.def, fitScale(w.def, 64)), text: ['Take ', name, ' off the wall?'],
+                              yes: 'Remove', no: 'Keep it' });
+      if (yes) removeWall(w);
+    }
+
+    function setupWalls() {
+      // Clicking the floor or sky lets go of the selected wall object.
+      app.stage.eventMode = 'static';
+      app.stage.hitArea = app.screen;
+      app.stage.on('pointerdown', ev => { if (ev.target === app.stage) selectWall(null); });
+      addEventListener('keydown', ev => {
+        if (!selectedWall || ev.target.closest?.('input, textarea, dialog, [popover]') || document.querySelector('dialog[open]')) return;
+        const step = ev.shiftKey ? WALL_BIG_STEP : WALL_STEP;
+        const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+        if (move) nudgeWall(selectedWall, ...move);
+        else if (ev.key === 'Delete' || ev.key === 'Backspace') confirmDeleteWall(selectedWall);
+        else if (ev.key === 'Escape') selectWall(null);
+        else return;
+        ev.preventDefault();
+      });
+    }
+
+    function hangStartingWalls() {
+      for (const [name, x, y] of START_WALL) addWall(CATALOG.find(d => d.name === name), x, y);
     }
 
     // ------------------------------------------------------------------
@@ -2020,15 +2392,39 @@
       setLight(light);
     }
 
-    // The light through the windows for this sky: a faint beam from each
-    // sill and a brighter patch on the floor, brightest in the middle.
+    // The light through the windows for this sky: from wherever each window
+    // hangs, a faint beam from its sill and a brighter patch on the floor,
+    // further out the higher the window is. Redrawn when windows move.
+    let skyLight = null;
     function setLight(light) {
+      skyLight = light;
+      drawLight();
+    }
+
+    // Keep a point (picture pixels) on the floor diamond.
+    function onRoomFloor([x, y]) {
+      const { x: cx, y: cy, rx, ry } = ROOM.floor;
+      const u = (x - cx) / rx, v = (y - cy) / ry;
+      const p = clampTo(u + v, -0.98, 0.98), q = clampTo(u - v, -0.98, 0.98);
+      return [cx + ((p + q) / 2) * rx, cy + ((p - q) / 2) * ry];
+    }
+
+    function windowShape(w) {
+      const W = WALLS[w.def.wall], [ix, iy] = W.into;
+      const sill = w.def.sill.map(([sx, sy]) => [w.x + sx, w.y + sy]);
+      const reach = sill.map(([x, y]) => W.base(x) - y);            // how high the sill is
+      const near = sill.map(([x], i) => onRoomFloor([x + ix * (2 + reach[i] * 0.25), W.base(x) + iy * (2 + reach[i] * 0.25)]));
+      const far = near.map(([x, y], i) => onRoomFloor([x + ix * (35 + reach[i] * 0.4), y + iy * (35 + reach[i] * 0.4)]));
+      return { sill, patch: [near[0], near[1], far[1], far[0]], stripes: w.def.blinds ? 5 : 0 };
+    }
+
+    function drawLight() {
       windowLight.clear();
-      if (!light) return;
-      const [color, strength] = light;
+      if (!skyLight) return;
+      const [color, strength] = skyLight;
       const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
       const centre = pts => [pts.reduce((n, p) => n + p[0], 0) / pts.length, pts.reduce((n, p) => n + p[1], 0) / pts.length];
-      for (const { sill, patch, stripes } of WINDOW_LIGHT) {
+      for (const { sill, patch, stripes } of walls.filter(w => w.def.sill).map(windowShape)) {
         const [a, b, c, d] = patch;
         windowLight.poly([...sill[0], ...sill[1], ...c, ...d]).fill({ color, alpha: strength * 0.35 });
         if (stripes) {                                   // light between the slats
@@ -2137,6 +2533,7 @@
       }
       for (const def of SCENERY) spawn(def, yard.x0, yard.y1, { zone: 'yard', fixed: true });
       placeScenery();
+      hangStartingWalls();
     }
 
     // Back to the starting room: default room type, starting cats and things.
@@ -2148,6 +2545,9 @@
         unlink(e);
       }
       entities.length = 0;
+      selectWall(null);
+      for (const w of walls) w.sprite.destroy();
+      walls.length = 0;
       for (const child of [...fx.removeChildren(), ...talk.removeChildren()]) child.destroy({ children: true });   // pop-ups, effects, bubbles
       emotes.length = 0;
       setRoom(DEFAULT_ROOM);
@@ -2224,6 +2624,7 @@
           button.addEventListener('pointerdown', ev => startDrag({ def }, ev));
           button.addEventListener('click', ev => {
             if (ev.detail && dragMoved) return;              // this click just ended a drag
+            if (def.kind === 'wall') return selectWall(addWall(def));
             const at = randomSpot();
             emote(spawn(def, at.x, at.y), '✨');
           });
@@ -2450,6 +2851,7 @@
     function start() {
       buildPalette();
       setupMenu();
+      setupWalls();
       setupSound();
       updateSky();
       setInterval(updateSky, 60_000);

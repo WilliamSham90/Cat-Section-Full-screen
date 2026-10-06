@@ -70,5 +70,12 @@ Install Pillow with `pip install pillow`.
   `sit.png`, `sleep.png`, `jump.png` and `attack.png` (strips of square
   frames), then add a line to `CATS` in `index.html`.
 - **An item:** add the picture under `assets/items/` and a line to `ITEMS`.
+  Give big furniture `solid: true` so cats walk around it (tables are left
+  open, because cats walk under them).
+- **A wall object:** add a line to `WALL_ITEMS` with `wall: 'left'` or
+  `'right'`. A window also gets a `sill` (its bottom edge in picture
+  pixels), which is where its light falls on the floor. In the app, click a
+  wall object and move it with the arrow keys (Shift for bigger steps),
+  remove it with Delete, or drag it to the trash.
 - **A song:** put the original in `source/music/`, add it to `MUSIC` in
   `tools/build_audio.py` and to `SONGS` in `index.html`, then run the tool.
