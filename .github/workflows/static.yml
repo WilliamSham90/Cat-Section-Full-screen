@@ -33,11 +33,16 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      # Publish only what the page loads; the originals in source/ and the
+      # tools stay in the repository.
+      - name: Collect the site
+        run: |
+          mkdir _site
+          cp -r index.html assets _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          path: '_site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5

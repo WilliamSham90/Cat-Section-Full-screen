@@ -1,0 +1,6 @@
+# Generated or machine-specific; never commit these.
+node_modules/
+__pycache__/
+_site/
+.DS_Store
+Thumbs.db

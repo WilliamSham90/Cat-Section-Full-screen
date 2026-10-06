@@ -1,4 +1,4 @@
-"""Cut the pieces of the cat UI sheet that the page uses into ui/.
+"""Cut the pieces of the cat UI sheet that the page uses into assets/ui/.
 
 CSS can only frame things (border-image) or show icons from whole images,
 not from a region of a sprite sheet, so each piece gets its own small PNG.
@@ -15,8 +15,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-SHEET = Path('CatUserInterface/CatUI.png')
-OUT = Path('ui')
+SHEET = Path('source/ui/cat-ui.png')
+OUT = Path('assets/ui')
 
 # name -> (x, y, w, h) on the sheet
 PIECES = {
