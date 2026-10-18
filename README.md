@@ -4,9 +4,14 @@ A cozy pixel-art cat room that runs in the browser. Drag cats, food, toys,
 beds and furniture into an isometric room, put plants and bowls up on the
 tables and shelves, watch the cats get on with their day, and send them out
 to the play area. Click a cat to name it, tell it what to do, or (for the
-cream cat) pick a mood: hide in a box, dance, flop over… Each of the
-15 room types comes furnished in its own colours, and the Photo button
-pauses everything and saves a picture of the room or the whole screen.
+cream, grey and orange cats) pick a mood: hide in a box, dance, hiss,
+flop over… Each of the 15 room types comes furnished in its own colours,
+and the Photo button pauses everything and saves a picture of the room or
+the whole screen.
+
+The settings sit in a dock beside the room; on a phone they fold into a
+round button. To get rid of something, right-click it, or drag it to the
+trash (on a phone the trash comes out while you're carrying something).
 
 Made by [William Sham](https://williamsham90.github.io/Portfolio/).
 
@@ -41,9 +46,11 @@ assets/               everything the page loads
   audio/sfx/          cat sounds                       ← made by tools/build_audio.py
   audio/music/        background music                 ← made by tools/build_audio.py
   icons/              favicon and app icons            ← made by tools/build_icons.py
+  fonts/              Pixelify Sans (SIL Open Font License, see OFL.txt)
   vendor/pixi.min.js  PixiJS 8.22.0, the renderer
   vendor/snapdom.mjs  SnapDOM 3.3.0 (MIT), draws the bar for whole-screen photos
 source/               originals that the tools turn into assets (not published)
+  cats/               whole sprite sheets the grey and orange cats' strips came from
   ui/                 cat-ui.png and pastel-ui.png sheets
   effects/            pixel effect GIFs
   sounds/, music/     original WAV and Ogg files
@@ -76,7 +83,13 @@ Install Pillow with `pip install pillow`.
   animations gets more to do: with the mood ones (`box1`, `dance`,
   `excited`, `surprised`, `tickle`, `crying`, `dead2`, `happy`, like the
   cream cat) it gets a Moods section in its menu (see `MOODS`), and with
-  `idle2` it looks round now and then.
+  `idle2` it looks round now and then. A cat with a different set, like the
+  grey and orange ones (see `KITTEN`), can lend one animation to another
+  with `as` (say `jump: 'run'`); with `walk` it strolls when it's in no
+  hurry, and with `eat` it eats from the dish in that animation.
+- **Loading:** the page first fetches only what the opening room and the
+  bar need (Coco, one picture of each other cat, the items, the first room)
+  and fetches the rest once the room is up (`loadArt` and `loadLater`).
 - **An item:** add the picture under `assets/items/` and a line to `ITEMS`.
   Give big furniture `solid: true` so cats walk around it, and balls and the
   mouse bounce off it (tables are left open, because cats walk under them).
@@ -87,7 +100,7 @@ Install Pillow with `pip install pillow`.
   `'right'`. A window also gets a `sill` (its bottom edge in picture
   pixels), which is where its light falls on the floor. In the app, click a
   wall object and move it with the arrow keys (Shift for bigger steps),
-  remove it with Delete, or drag it to the trash.
+  remove it with Delete or a right-click, or drag it to the trash.
 - **A room's furniture:** each line of `ROOM_TYPES` names one of the
   `ARRANGEMENTS` (where things go) and the colours to use for it.
 - **A song:** put the original in `source/music/`, add it to `MUSIC` in
