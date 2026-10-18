@@ -10,10 +10,35 @@
   <link rel="icon" href="assets/icons/icon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap">
+  <link rel="preload" href="assets/fonts/pixelify-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    /* Pixelify Sans (SIL Open Font License, see assets/fonts/OFL.txt), served
+       from here so the page doesn't wait on another site. Split like Google
+       Fonts does it, so only the letters in use are downloaded. */
+    @font-face {
+      font-family: "Pixelify Sans";
+      font-weight: 400 700;
+      font-display: swap;
+      src: url("assets/fonts/pixelify-sans-latin.woff2") format("woff2");
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+                     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: "Pixelify Sans";
+      font-weight: 400 700;
+      font-display: swap;
+      src: url("assets/fonts/pixelify-sans-latin-ext.woff2") format("woff2");
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+                     U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face {
+      font-family: "Pixelify Sans";
+      font-weight: 400 700;
+      font-display: swap;
+      src: url("assets/fonts/pixelify-sans-cyrillic.woff2") format("woff2");
+      unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+    }
+
     /* Colours and frames come from the cat UI sheet (CatUserInterface/CatUI.png);
        tools/build_ui.py cuts the pieces used here into ui/. Every piece is
        drawn at exactly 2× so its pixels stay crisp. */
@@ -30,6 +55,9 @@
       --danger: #c8553d;
       --bg: #2a2230;                        /* behind the room when the sky is "Dark" */
       --font: "Pixelify Sans", system-ui, sans-serif;
+      /* From the bottom of the screen to the top of the signature, which
+         sits 12px over the play area (--yard-strip, set by the script). */
+      --sig-top: calc(var(--yard-strip, 0px) + 54px);
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -109,10 +137,9 @@
       image-rendering: pixelated;
     }
 
-    /* ---- Control bar: everything you can add, plus the tools ---- */
+    /* ---- Control bar: everything you can add ---- */
     .bar {
       display: flex;
-      gap: 12px;
       padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
       background: var(--cocoa);
       border-bottom: 4px solid var(--cocoa-dark);
@@ -122,14 +149,18 @@
       min-width: 0;                         /* let it scroll instead of widening the page */
       display: flex;
       align-items: center;
-      gap: 8px;
       overflow-x: auto;
       scrollbar-width: thin;
       scrollbar-color: var(--tan) transparent;
       padding-bottom: 2px;
       min-height: 56px;                     /* its height before the items are added, so the room doesn't jump */
     }
+    /* The groups sit in one row inside it. (One row, not the groups
+       themselves, so a whole-screen photo of it scrolled comes out right:
+       SnapDOM shifts a scrolled box's insides as a single block.) */
+    .palette > div { display: flex; align-items: center; gap: 8px; width: max-content; }
     .group, .group > div { display: flex; gap: 6px; }
+    .group { flex: none; }
     .group > div[hidden] { display: none; }
 
     /* A group's button: picture, name, and + (closed) or − (open). */
@@ -160,21 +191,53 @@
     }
     .item canvas, .ghost, .pic canvas { pointer-events: none; }
 
-    .tools { flex: none; display: flex; gap: 8px; }
+    /* ---- Settings: a dock to the right of the room. On small screens it
+       folds into a round button, and the trash only comes out while
+       something is carried (see "Compact layout" below). ---- */
+    .dock {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right));
+      top: 0;                                             /* centred (by the auto margins) level with */
+      bottom: var(--sig-top);                             /* the room, above the signature */
+      height: fit-content;
+      margin: auto 0;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: calc(100% - var(--sig-top) - 16px);
+      overflow-y: auto;
+      scrollbar-width: none;
+      padding: 8px;
+      background: var(--cocoa);
+      border: 3px solid var(--cocoa-dark);
+      border-radius: 16px;
+      box-shadow: 0 4px 0 var(--cocoa-dark);
+    }
+    .tools { display: flex; flex-direction: column; gap: 6px; }
     .tool, .trash {
       flex: none;
-      width: 72px;
+      width: 68px;
+      height: 56px;
       display: grid;
       place-content: center;
       justify-items: center;
       gap: 2px;
+      padding: 0;
       font-size: 12px;
       font-weight: 600;
+      line-height: 1.2;
     }
-    .tool { padding: 0; }
-    .tool canvas, .tool .sky-thumb { display: block; width: 32px; height: 28px; }
+    .tool svg { width: 24px; height: 24px; }
+    .tool canvas, .tool .sky-thumb { display: block; width: 28px; height: 24px; }
+    .tool[aria-busy="true"] { cursor: progress; opacity: .6; }
+    /* A tool whose menu is open stays pressed in. */
+    body:has(#sound-menu:popover-open) #sound-button, body:has(#photo-menu:popover-open) #photo-button {
+      border-image-source: url("assets/ui/tile-sand.png");
+    }
     .dragging .tool { pointer-events: none; }
     .trash {
+      margin-top: 4px;                                    /* set a little apart from the tools */
       border: 2px dashed var(--sand);
       border-radius: 10px;
       color: var(--cream);
@@ -186,16 +249,18 @@
       border-color: var(--cream);
       transform: scale(1.06);
     }
+    .fab { display: none; }
 
     /* ---- Scene: the room sits in the middle of this backdrop ---- */
     #scene {
       position: relative;
       min-height: 0;
+      overflow: clip;                                       /* the tucked-away trash mustn't make the page scroll */
       background: var(--bg) center / cover no-repeat;      /* the sky picture is set from the clock */
       image-rendering: pixelated;
       transition: background-image 1.5s;
     }
-    #scene canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+    #scene > canvas { position: absolute; inset: 0; display: block; touch-action: none; }
 
     .ghost { position: fixed; left: 0; top: 0; z-index: 10; opacity: .85; }
     .dragging, .dragging * { cursor: grabbing !important; user-select: none; }
@@ -294,14 +359,15 @@
       font-size: 12px;
     }
 
-    /* ---- Menus that open under a tool: Sound and Photo ---- */
+    /* ---- Menus that open beside a tool: Sound and Photo ---- */
     .tool-menu {
       position: fixed;
       inset: auto;
       margin: 0;
       width: 280px;
+      max-height: calc(100dvh - 16px);
       padding: 0 8px 6px;
-      overflow: visible;
+      overflow-y: auto;
     }
     .tool-menu h2 { margin: 0 0 8px; font-size: 20px; text-align: center; }
     .tool-menu h3 { margin: 0; font-size: 16px; }
@@ -361,6 +427,77 @@
     }
     .paused[hidden] { display: none; }
 
+    /* ---- Right-click menu for a cat or thing in the room ---- */
+    .thing-menu {
+      position: fixed;
+      inset: auto;
+      margin: 0;
+      width: max-content;
+      min-width: 180px;
+      max-width: 260px;
+      padding: 2px;
+      border: 8px solid transparent;
+      border-image: url("assets/ui/tile.png") 4 fill / 8px;
+      background: none;
+      color: var(--ink);
+      image-rendering: pixelated;
+      filter: drop-shadow(0 3px 0 rgb(64 57 57 / .45));
+    }
+    .thing-menu header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      padding: 0 4px 6px;
+      border-bottom: 2px dashed var(--sand);
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .thing-menu header > :first-child { flex: none; display: grid; place-items: center; width: 32px; height: 32px; }
+    .thing-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 5px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .thing-menu button:hover, .thing-menu button:focus-visible { background: var(--danger); color: var(--cream); outline: none; }
+    .thing-menu kbd { margin-left: auto; padding-left: 16px; font: inherit; font-size: 12px; opacity: .7; }
+
+    /* ---- Loading screen, until the first room is ready ---- */
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      gap: 14px;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--cream);
+      font-size: 18px;
+      text-align: center;
+      transition: opacity .4s, visibility .4s;
+    }
+    .loading p { max-width: 34ch; margin: 0; }
+    .loading img { width: 129px; height: 96px; animation: doze 2.4s ease-in-out infinite; }
+    @keyframes doze { 50% { translate: 0 -5px; } }
+    .loading .meter { width: min(240px, 70vw); height: 16px; border-color: var(--cream); background: var(--cocoa-dark); }
+    .loading .meter > span { width: 0; }
+    /* Till the pictures start counting (the renderer is still coming), a slide to show it's working. */
+    .loading .meter[aria-valuenow="0"] > span { width: 30%; animation: waiting 1.1s ease-in-out infinite alternate; }
+    @keyframes waiting { to { translate: 233% 0; } }
+    .loading.done { opacity: 0; visibility: hidden; }
+    .loading.failed img { animation: none; filter: grayscale(1); }
+    .loading.failed .meter { display: none; }
+
     /* ---- Hint shown while a wall object is selected ---- */
     .wall-hint {
       position: absolute;
@@ -390,6 +527,7 @@
       right: max(12px, env(safe-area-inset-right));
       bottom: calc(var(--yard-strip, 0px) + 12px);     /* just above the play area */
       z-index: 5;
+      height: 42px;                         /* (see --sig-top) */
       gap: 8px;
       margin: 0;
       padding: 2px 16px 2px 10px;           /* script fonts lean right: leave them room */
@@ -405,77 +543,138 @@
       letter-spacing: .02em;
     }
 
+    @media (max-height: 760px) {
+      /* A shorter dock, so it still fits beside the room. */
+      .tool, .trash { height: 46px; gap: 1px; font-size: 10px; line-height: 1.1; }
+      .tool svg { width: 18px; height: 18px; }
+      .tool canvas, .tool .sky-thumb { width: 21px; height: 18px; }
+    }
     @media (max-width: 600px) {
-      /* Tools on top, the item groups get a full-width row underneath. */
-      .bar { flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
-      .tools { order: -1; width: 100%; justify-content: flex-end; }
-      .palette { flex-basis: 100%; min-height: 48px; }
+      .bar { padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left)); }
+      .palette { min-height: 48px; }
       .toggle { height: 44px; }
       .toggle canvas + .label { display: none; }         /* the picture and aria-label name it */
       .item { width: 44px; height: 44px; }
-      .tools { gap: 4px; }
-      .tool, .trash { width: 48px; font-size: 11px; }
+      .wall-hint { width: max-content; max-width: calc(100% - 24px); white-space: normal; text-align: center; border-radius: 14px; }
+    }
+    @media (max-width: 340px) {
+      .signature { padding-right: 12px; font-size: 11px; }    /* fits a folded phone */
+      .signature .name { font-size: 15px; }
     }
     @media (max-height: 500px) {
       /* Phones on their side: a slimmer bar leaves the room more height. */
-      .bar { gap: 6px; padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
+      .bar { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 4px; }
       .palette { min-height: 44px; }
       .toggle { height: 40px; }
       .toggle .sign { width: 22px; height: 22px; }
       .item { width: 40px; height: 40px; }
-      .tools { gap: 4px; }
-      .tool, .trash { width: 52px; font-size: 11px; }
-      .tool svg { width: 20px; height: 20px; }
-      .tool canvas, .tool .sky-thumb { width: 24px; height: 20px; }
       .cat-menu { max-height: calc(100dvh - 16px); overflow-y: auto; }   /* scrolls rather than running off the screen */
     }
+
+    /* ---- Compact layout (phones): the settings fold into a round button
+       just above the signature, and open above it (beside it, in a row, on
+       a phone on its side). While something is carried, the button makes
+       way for a round trash can on the right. Keep the query in step with
+       `compact` in the script. ---- */
+    @media (max-width: 600px), (max-height: 560px) {
+      :root { --fab-bottom: calc(var(--sig-top) + 12px); }
+      .dock {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        background: none;
+        border: 0;
+        box-shadow: none;
+      }
+      .fab {
+        position: absolute;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: var(--fab-bottom);
+        z-index: 6;
+        display: grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        padding: 0;
+        border: 3px solid var(--cocoa-dark);
+        border-radius: 50%;
+        background: var(--cocoa);
+        color: var(--cream);
+        box-shadow: 0 4px 0 var(--cocoa-dark);
+        cursor: pointer;
+        transition: opacity .2s, scale .2s;
+      }
+      .fab:active { translate: 0 2px; box-shadow: 0 2px 0 var(--cocoa-dark); }
+      .fab .shut, body:has(#tools:popover-open) .fab .open { display: none; }
+      body:has(#tools:popover-open) .fab .shut { display: block; }
+      .holding .fab { opacity: 0; scale: .5; pointer-events: none; }
+      .tools:not(:popover-open) { display: none; }       /* (.tools' own display would show it) */
+      .tools:popover-open {
+        position: fixed;
+        inset: auto max(12px, env(safe-area-inset-right)) calc(var(--fab-bottom) + 66px) auto;
+        margin: 0;
+        max-height: calc(100dvh - var(--fab-bottom) - 74px);
+        overflow-y: auto;
+        padding: 8px;
+        background: var(--cocoa);
+        border: 3px solid var(--cocoa-dark);
+        border-radius: 16px;
+        box-shadow: 0 4px 0 var(--cocoa-dark);
+        color: var(--ink);
+        transition: opacity .15s, translate .15s;
+      }
+      @starting-style { .tools:popover-open { opacity: 0; translate: 0 12px; } }
+      .tool-menu { inset: 0; margin: auto; }              /* Sound and Photo open in the middle */
+      .trash {
+        position: absolute;
+        right: max(12px, env(safe-area-inset-right));
+        top: calc((100% - var(--sig-top)) / 2);
+        z-index: 7;
+        width: 76px;
+        height: 76px;
+        margin: 0;
+        border: 3px dashed var(--cream);
+        border-radius: 50%;
+        background: var(--cocoa);
+        box-shadow: 0 4px 0 var(--cocoa-dark);
+        translate: calc(100% + 24px) -50%;                /* tucked away past the edge */
+        visibility: hidden;
+        transition: translate .2s, visibility .2s, background-color .15s, transform .15s;
+      }
+      .holding .trash { translate: 0 -50%; visibility: visible; }
+      .trash.armed { background: var(--danger); }
+    }
+    @media (max-height: 560px) and (orientation: landscape) {
+      .tools:popover-open {
+        flex-direction: row;
+        inset: auto calc(max(12px, env(safe-area-inset-right)) + 68px) var(--fab-bottom) auto;
+        max-height: none;
+        max-width: calc(100vw - 100px);
+        overflow-x: auto;
+      }
+      @starting-style { .tools:popover-open { opacity: 0; translate: 12px 0; } }
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      #scene, .trash { transition: none; }
+      #scene, .trash, .fab, .tools:popover-open { transition: none; }
+      .loading img { animation: none; }
+      .loading .meter[aria-valuenow="0"] > span { animation: none; width: 0; }
       .flash { display: none; }
     }
   </style>
 </head>
 <body>
+  <!-- Covers the page until the first room is ready. -->
+  <div id="loading" class="loading">
+    <img src="assets/ui/sleeping-cat.png" alt="" width="129" height="96">
+    <p id="loading-text">Waking up the cats…</p>
+    <div class="meter" role="progressbar" aria-labelledby="loading-text" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+    <button type="button" id="loading-retry" class="btn" hidden>Try again</button>
+  </div>
+
   <header class="bar" aria-label="Add cats and objects: open a group, then drag an item into the room or click it">
     <nav class="palette" id="palette" aria-label="Items"></nav>
-    <div class="tools">
-      <button type="button" class="tool tile" id="room-button" title="Choose a room" aria-haspopup="dialog">
-        <span id="room-pic" aria-hidden="true"></span>
-        Room
-      </button>
-      <button type="button" class="tool tile" id="sky-button" title="Choose the sky behind the room" aria-haspopup="dialog">
-        <span id="sky-pic" aria-hidden="true"></span>
-        Sky
-      </button>
-      <button type="button" class="tool tile" id="sound-button" title="Music and cat sounds" popovertarget="sound-menu">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
-        </svg>
-        Sound
-      </button>
-      <button type="button" class="tool tile" id="photo-button" title="Take a photo, or pause everything" popovertarget="photo-menu">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>
-        </svg>
-        Photo
-      </button>
-      <button type="button" class="tool tile" id="reset" title="Put the room back the way it started">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
-        </svg>
-        Reset
-      </button>
-      <div class="trash" id="trash" title="Drag something here to delete it">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
-        </svg>
-        Trash
-      </div>
-    </div>
   </header>
   <main id="scene">
     <p id="wall-hint" class="wall-hint" role="status" hidden>
@@ -486,6 +685,58 @@
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
       Paused · tap to carry on
     </button>
+
+    <!-- Settings, beside the room. On small screens the round button opens them. -->
+    <aside class="dock" aria-label="Settings">
+      <div class="tools" id="tools">
+        <button type="button" class="tool tile" id="room-button" title="Choose a room" aria-haspopup="dialog">
+          <span id="room-pic" aria-hidden="true"></span>
+          Room
+        </button>
+        <button type="button" class="tool tile" id="sky-button" title="Choose the sky behind the room" aria-haspopup="dialog">
+          <span id="sky-pic" aria-hidden="true"></span>
+          Sky
+        </button>
+        <button type="button" class="tool tile" id="sound-button" title="Music and cat sounds" popovertarget="sound-menu">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+          </svg>
+          Sound
+        </button>
+        <button type="button" class="tool tile" id="photo-button" title="Take a photo, or pause everything" popovertarget="photo-menu">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>
+          </svg>
+          Photo
+        </button>
+        <button type="button" class="tool tile" id="reset" title="Put the room back the way it started">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
+          </svg>
+          Reset
+        </button>
+      </div>
+      <div class="trash" id="trash" title="Drag something here to delete it">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
+        </svg>
+        Trash
+      </div>
+      <button type="button" class="fab" id="tools-fab" popovertarget="tools" title="Settings" aria-label="Settings">
+        <svg class="open" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>
+        </svg>
+        <svg class="shut" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </aside>
   </main>
   <a class="signature nameplate" href="https://williamsham90.github.io/Portfolio/" target="_blank" rel="noopener">
     <span>Made by</span> <span class="name">William Sham</span><span class="visually-hidden"> (portfolio, opens in a new tab)</span>
@@ -505,7 +756,19 @@
     </section>
   </div>
 
-  <!-- Opens under the Sound button. Music and cat sounds are switched separately. -->
+  <!-- Opens where a cat or thing in the room is right-clicked. -->
+  <div id="thing-menu" class="thing-menu" popover role="menu" aria-labelledby="thing-name">
+    <header aria-hidden="true"><span id="thing-pic"></span><span id="thing-name"></span></header>
+    <button type="button" id="thing-delete" role="menuitem" aria-keyshortcuts="Delete">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/>
+      </svg>
+      Delete <kbd aria-hidden="true">Del</kbd>
+    </button>
+  </div>
+
+  <!-- Opens beside the Sound button. Music and cat sounds are switched separately. -->
   <div id="sound-menu" class="tool-menu panel" popover aria-labelledby="sound-title">
     <h2 id="sound-title">Sound</h2>
     <section class="sound-part" aria-labelledby="music-title">
@@ -527,7 +790,7 @@
     </section>
   </div>
 
-  <!-- Opens under the Photo button. -->
+  <!-- Opens beside the Photo button. -->
   <div id="photo-menu" class="tool-menu panel" popover aria-labelledby="photo-title">
     <h2 id="photo-title">Photo</h2>
     <section class="sound-part" aria-labelledby="pause-title">
@@ -592,15 +855,29 @@
     // Catalogue – every cat and object in the control bar
     // ------------------------------------------------------------------
     // `scale` is the on-screen pixel size on a desktop-width screen (halved on
-    // phones). Cat 1 is drawn at twice the detail of the others, hence 2 vs 4.
+    // phones). Cat 1 is drawn at twice the detail of the others, hence 2 vs 4;
+    // the grey and orange cats fill more of their frames, hence 3.
     // Cat sheets are strips of square frames; the frame count comes from the
     // image size, so only the file names are listed here.
-    // Every cat has CAT_ANIMS; some have more. The cream cat has a whole set
+    // Most cats have CAT_ANIMS; some have more. The cream cat has a whole set
     // of moods (see Moods), the others a second idle where they look round.
     const CAT_ANIMS = ['idle', 'run', 'sit', 'sleep', 'jump', 'attack'];
     const MOOD_ANIMS = ['happy', 'box1', 'box2', 'box3', 'dance', 'excited', 'surprised', 'tickle', 'crying', 'dead2'];
+    // The grey and orange cats have a set of their own: no jump or attack,
+    // but they walk, eat from a dish, sniff, yawn, hiss, blush… `as` lends
+    // one of a cat's animations to one it hasn't got, and `hold` is the
+    // animation and frame it shows while carried (others: jump, frame 3).
+    const KITTEN = {
+      scale: 3,
+      anims: ['idle', 'idle2', 'blink', 'sit', 'loaf', 'walk', 'run', 'sleep', 'yawn', 'eat', 'sniff',
+              'dance', 'hiss', 'gasp', 'cry', 'shy', 'blush', 'box1', 'box2', 'box3'],
+      as: { jump: 'run', attack: 'dance', happy: 'loaf', surprised: 'gasp', crying: 'cry' },
+      hold: ['dance', 1],
+    };
     const CATS = [
       { name: 'Cream cat', dir: 'cream', scale: 2, anims: [...CAT_ANIMS, ...MOOD_ANIMS] },
+      { name: 'Grey cat', dir: 'grey-cat', ...KITTEN },
+      { name: 'Orange cat', dir: 'orange-cat', ...KITTEN },
       { name: 'Tiger cat', dir: 'tiger', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
       { name: 'Batman cat', dir: 'batman', scale: 4, anims: CAT_ANIMS },
       { name: 'Egyptian cat', dir: 'egyptian', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
@@ -608,12 +885,14 @@
       { name: 'Calico cat', dir: 'calico', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
       { name: 'Odd-eyed cat', dir: 'odd-eyed', scale: 4, anims: [...CAT_ANIMS, 'idle2'] },
     ];
+    const COCO = CATS[0];                                   // the cream cat starts in the room
     const catUrl = (cat, anim) => `assets/cats/${cat.dir}/${anim}.png`;
 
     // "frames per tick at 60 ticks/sec" (0.1 ≈ 6 fps)
     const ANIM_SPEED = {
       idle: 0.1, idle2: 0.12, run: 0.22, sit: 0.07, sleep: 0.04, jump: 0.25, attack: 0.25, happy: 0.12,
       box1: 0.1, box2: 0.12, box3: 0.14, dance: 0.14, excited: 0.12, surprised: 0.14, tickle: 0.1, crying: 0.1,
+      walk: 0.15, blink: 0.1, loaf: 0.1, sniff: 0.1, shy: 0.1, blush: 0.1,
     };
 
     // frame = [x, y, w, h] of the first frame; `frames` more follow every `stride` px.
@@ -728,7 +1007,7 @@
         ['Heart frame, green', [520, 384, 17, 32]],
       ]),
     ];
-    const CATALOG = [...CATS.map(c => ({ ...c, group: 'Cats', kind: 'cat' })), ...ITEMS, ...WALL_ITEMS];
+    const CATALOG = [...CATS.map(c => Object.assign(c, { group: 'Cats', kind: 'cat' })), ...ITEMS, ...WALL_ITEMS];
 
     // Fixed scenery, not in the bar: the cat tree that makes the play area.
     // furniture/cat-tree-light.png is a paler version that also fits.
@@ -904,8 +1183,8 @@
     const clampTo = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
     const every = (sec, fn) => { let t = sec; return dt => { if ((t -= dt) <= 0) { t = sec; fn(); } }; };
     const isOver = (el, ev) => {
-      const r = el.getBoundingClientRect();
-      return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+      const r = el.getBoundingClientRect();                 // (all 0 for something not shown)
+      return r.width > 0 && ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
     };
 
     // Cut `count` frames (w×h, every `stride` px to the right) out of a sheet.
@@ -916,23 +1195,25 @@
     // is the same box around the feet: only that part is clickable, so the
     // empty corners of a picture don't hide what's behind it.
     // Done once at load time, never per frame.
+    const scratch = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
     function cut(texture, [x, y, w, h], count = 1, stride = w) {
-      const img = texture.source.resource;
-      const ctx = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height })
-        .getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0);
+      const img = texture.source.resource, span = (count - 1) * stride + w;
+      // Only this picture's part of the sheet is copied out to read (copying
+      // a whole sheet for each picture on it made starting up slow).
+      Object.assign(scratch.canvas, { width: span, height: h });          // (which also clears it)
+      scratch.drawImage(img, x, y, span, h, 0, 0, span, h);
+      const { data } = scratch.getImageData(0, 0, span, h);
 
       let left = w, right = -1, top = h, bottom = -1;
       const textures = [];
       for (let i = 0; i < count; i++) {
-        const fx = x + i * stride;
-        textures.push(new PIXI.Texture({ source: texture.source, frame: new PIXI.Rectangle(fx, y, w, h) }));
-        const { data } = ctx.getImageData(fx, y, w, h);
-        for (let p = 0; p < w * h; p++) {
-          if (!data[p * 4 + 3]) continue;
-          const px = p % w, py = Math.floor(p / w);
-          left = Math.min(left, px); right = Math.max(right, px);
-          top = Math.min(top, py); bottom = Math.max(bottom, py);
+        textures.push(new PIXI.Texture({ source: texture.source, frame: new PIXI.Rectangle(x + i * stride, y, w, h) }));
+        for (let py = 0; py < h; py++) {
+          for (let px = 0; px < w; px++) {
+            if (!data[(py * span + i * stride + px) * 4 + 3]) continue;
+            left = Math.min(left, px); right = Math.max(right, px);
+            top = Math.min(top, py); bottom = Math.max(bottom, py);
+          }
         }
       }
       if (bottom < 0) [left, right, top, bottom] = [0, w - 1, 0, h - 1];   // fully transparent
@@ -1032,16 +1313,18 @@
       return c;
     }
 
+    // Something needed to start didn't load: say so on the loading screen.
     function showError(err) {
       console.error(err);
-      const el = document.createElement('div');
-      el.style.cssText =
-        'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
-        'padding:24px;text-align:center;color:#f2f2f7;background:#1b1b24;font:16px/1.5 system-ui,sans-serif;';
-      el.textContent = location.protocol === 'file:'
+      const fromDisk = location.protocol === 'file:', box = document.getElementById('loading');
+      box.classList.remove('done');
+      box.classList.add('failed');
+      document.getElementById('loading-text').textContent = fromDisk
         ? 'Images can\'t load when this page is opened straight from disk. Serve the folder with a local server (e.g. VS Code Live Server, "npx serve", or "python -m http.server") and open it via http://localhost.'
-        : `${err.message}. Check that the image files are in the "sprite" folder and match the names in the catalogue.`;
-      document.body.appendChild(el);
+        : 'The cats couldn\'t be fetched. Check your connection and try again.';
+      const retry = document.getElementById('loading-retry');
+      retry.hidden = fromDisk;
+      retry.onclick = () => location.reload();
     }
 
     // ------------------------------------------------------------------
@@ -1056,46 +1339,88 @@
     const skiesDialog = document.getElementById('skies');
     const skyGrid = document.getElementById('sky-grid');
 
+    if (!globalThis.PIXI) {                               // its script didn't load
+      const err = new Error('PixiJS didn\'t load');
+      showError(err);
+      throw err;
+    }
     PIXI.TextureStyle.defaultOptions.scaleMode = 'nearest';    // crisp pixel art everywhere
 
     const app = new PIXI.Application();
-    await app.init({
-      resizeTo: sceneEl,
-      backgroundAlpha: 0,                                 // the floor is drawn by CSS
-      antialias: false,
-      autoDensity: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
-      roundPixels: true,
-      powerPreference: 'high-performance',
-    });
+    try {
+      await app.init({
+        resizeTo: sceneEl,
+        backgroundAlpha: 0,                               // the floor is drawn by CSS
+        antialias: false,
+        autoDensity: true,
+        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        roundPixels: true,
+        powerPreference: 'high-performance',
+      });
+    } catch (err) {
+      showError(err);
+      throw err;
+    }
     sceneEl.appendChild(app.canvas);
     new ResizeObserver(() => app.queueResize()).observe(sceneEl);
 
-    const art = {};                                     // url → loaded image, for drawing on canvases
+    // Pictures come in two goes. First what the opening scene and the bar
+    // need: every item (the bar shows them all), the starting room, all of
+    // Coco, and one picture of each other cat, while the loading screen
+    // counts up. The rest follows once the room is up (loadLater). On a
+    // shaky connection each picture is tried a few times.
+    const LOAD = { strategy: 'retry', retryCount: 3, retryDelay: 1000 };
+    const fxUrl = name => `assets/effects/${name}.png`;
+    const art = {};                                     // room url → its picture, for drawing on canvases
+    let later = Promise.resolve();                      // the second go (see loadLater)
+    const loadMore = () => (later = later.then(loadLater).catch(err => console.warn('Some pictures didn\'t load:', err)));
 
-    async function loadArt() {
-      const defs = [...CATALOG, ...SCENERY];
-      const urlsOf = d => d.kind === 'cat' ? d.anims.map(anim => catUrl(d, anim)) : [d.src];
-      const fxUrl = name => `assets/effects/${name}.png`;
-      const urls = [...new Set([...defs.flatMap(urlsOf), ...ROOM_TYPES.map(r => r.src), ...Object.keys(EFFECTS).map(fxUrl), 'assets/ui/bubble.png'])];
-      // The name tags are drawn in the page's pixel font, so wait for it (but not forever, or if offline).
+    async function loadArt(onProgress) {
+      const things = [...ITEMS, ...WALL_ITEMS, ...SCENERY];
+      const urls = [...new Set([
+        ...things.map(d => d.src),
+        ...CATS.flatMap(c => (c === COCO ? c.anims : ['idle']).map(anim => catUrl(c, anim))),
+        ROOM_TYPES[DEFAULT_ROOM].src, 'assets/ui/bubble.png',
+      ])];
+      // The name tags are drawn in the page's pixel font, so wait for it (but not forever).
       const font = Promise.race([document.fonts.load('600 14px "Pixelify Sans"'), new Promise(r => setTimeout(r, 3000))]).catch(() => {});
-      const [tex] = await Promise.all([PIXI.Assets.load(urls), font]);
-      for (const url of urls) art[url] = tex[url].source.resource;
+      const [tex] = await Promise.all([PIXI.Assets.load(urls, { ...LOAD, onProgress }), font]);
       bubbleTexture = tex['assets/ui/bubble.png'];
-      for (const [name, effect] of Object.entries(EFFECTS)) {
-        const t = tex[fxUrl(name)];
-        effect.textures = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height)).textures;
+      for (const d of things) d.look = cut(tex[d.src], d.frame, d.frames, d.stride);
+      for (const c of CATS) c.anim = {};
+      addArt(tex);
+      for (const c of CATS) c.look = c.anim.idle;
+    }
+
+    // The rest: the effects, the other cats' animations and the other rooms
+    // (asked for in that order: rooms are only needed when picking one).
+    // Till they arrive effects are skipped, a cat makes do with the
+    // animations it has, and the room picker waits. A picture that still
+    // fails is left out; running this again fetches only what's missing.
+    async function loadLater() {
+      const urls = [
+        ...Object.keys(EFFECTS).filter(name => !EFFECTS[name].textures).map(fxUrl),
+        ...CATS.flatMap(c => c.anims.filter(anim => !c.anim[anim]).map(anim => catUrl(c, anim))),
+        ...ROOM_TYPES.map(r => r.src).filter(src => !art[src]),
+      ];
+      addArt(Object.fromEntries(await Promise.all(urls.map(async url => [url, await PIXI.Assets.load(url, LOAD).catch(() => null)]))));
+    }
+
+    // Put loaded pictures (url → texture) where they're used.
+    function addArt(tex) {
+      const strip = t => cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height));   // square frames
+      for (const { src } of ROOM_TYPES) if (tex[src]) art[src] = tex[src].source.resource;
+      for (const c of CATS) {
+        for (const anim of c.anims) if (tex[catUrl(c, anim)]) c.anim[anim] = strip(tex[catUrl(c, anim)]);
+        for (const [anim, as] of Object.entries(c.as ?? {})) c.anim[anim] ??= c.anim[as];
       }
-      for (const d of defs) {
-        if (d.kind !== 'cat') { d.look = cut(tex[d.src], d.frame, d.frames, d.stride); continue; }
-        d.anim = {};
-        for (const name of d.anims) {
-          const t = tex[catUrl(d, name)];
-          d.anim[name] = cut(t, [0, 0, t.height, t.height], Math.round(t.width / t.height));
-        }
-        d.look = d.anim.idle;
-      }
+      for (const [name, effect] of Object.entries(EFFECTS)) if (tex[fxUrl(name)]) effect.textures = strip(tex[fxUrl(name)]).textures;
+    }
+
+    function showProgress(done) {
+      const meter = document.querySelector('#loading .meter'), percent = Math.round(done * 100);
+      meter.firstElementChild.style.width = `${percent}%`;
+      meter.setAttribute('aria-valuenow', String(percent));
     }
 
     // ------------------------------------------------------------------
@@ -1160,22 +1485,25 @@
       const { width, height } = app.screen;
       const [cx, cy, cw, ch] = ROOM.crop;
       const strip = clampTo(height * YARD_STRIP.share, YARD_STRIP.min, YARD_STRIP.max);
+      const space = roomSpace(width);
       const zoomFor = h => {
-        const best = Math.min(width / cw, h / ch) * 0.96;
+        const best = Math.min(space / cw, h / ch) * 0.96;
         // A whole-number zoom keeps the pixel art crisp; only give that up when it would shrink the room a lot.
         return Math.floor(best) >= 1 && Math.floor(best) / best > 0.85 ? Math.floor(best) : best;
       };
+      // Centred on the screen, or in the space left of the dock if it would go under it.
+      const leftFor = k => ((width + cw * k) / 2 <= space ? width - cw * k : space - cw * k) / 2;
       // The room sits above the strip. If the cat tree wouldn't fit beside
       // it, the room also clears the tree's height.
       let above = height - strip;
       let k = zoomFor(above);
       const treeScale = scaleAt(PLAY_TREE, k);
       const [, , tw, th] = PLAY_TREE.look.crop;
-      if ((width - cw * k) / 2 < tw * treeScale + 16) {
+      if (leftFor(k) < tw * treeScale + 16) {
         above = height - Math.max(strip, th * treeScale + 8);
         k = zoomFor(above);
       }
-      const x = Math.round((width - cw * k) / 2 - cx * k);
+      const x = Math.round(leftFor(k) - cx * k);
       const y = Math.round((above - ch * k) / 2 - cy * k);
       const next = { x0: 8, x1: width - 8, y0: height - strip + 14, y1: height - 6 };
 
@@ -1282,6 +1610,7 @@
       const e = { def, kind: def.kind, sprite, x, y, zone, fixed, lift: 0, z: 0, vx: 0, vy: 0,
                   dir: def.kind === 'cat' && Math.random() < 0.5 ? -1 : 1 };
       sprite.on('pointerdown', ev => startDrag({ e }, ev));
+      sprite.on('rightclick', ev => openThingMenu({ e }, ev));
       world.addChild(sprite);
       if (HAS_SHADOW.has(def.kind)) shadows.addChild(e.shadow = new PIXI.Graphics(shadowShape));
       fit(e);
@@ -1318,6 +1647,7 @@
       for (const o of entities) if (o.on === e) unseat(o);   // what was on it comes down
       if (!quiet) emote(e, '💨');
       if (e === menuCat) catMenu.hidePopover();
+      if (e === menuThing?.e) thingMenu.hidePopover();
       unlink(e);
     }
 
@@ -1369,7 +1699,7 @@
     const CAT_NAMES = ['Mochi', 'Luna', 'Biscuit', 'Pumpkin', 'Tofu', 'Miso', 'Pepper', 'Nala', 'Oreo', 'Ginger',
       'Cleo', 'Milo', 'Willow', 'Peanut', 'Sushi', 'Bean', 'Toast', 'Maple', 'Pickle', 'Noodle', 'Waffle', 'Olive'];
     // The first cats to arrive get these, in order (Coco starts in the room).
-    const FIRST_NAMES = ['Coco', 'Moose'];
+    const FIRST_NAMES = ['Coco', 'Moose', 'Nova'];
     let catsArrived = 0;
     function freshName() {
       const first = FIRST_NAMES[catsArrived++];
@@ -1446,9 +1776,11 @@
       say(cat, pick(LINES[need] ?? LINES.chat));
     }
 
-    // Play a pixel effect once at (x, y), then throw it away.
+    // Play a pixel effect once at (x, y), then throw it away. (Skipped
+    // while the effects are still loading.)
     function effectAt(name, x, y) {
       const { textures, at } = EFFECTS[name];
+      if (!textures) return;
       const sprite = new PIXI.AnimatedSprite({ textures, loop: false, animationSpeed: FX_SPEED });
       sprite.anchor.set(0.5, at === 'head' ? 1 : 0.5);
       sprite.scale.set(Math.max(1, Math.round(2 * unit())));
@@ -1460,12 +1792,12 @@
     }
 
     // A pop-up above an entity (❤️ 💤 ❗ …): a pixel effect where there is
-    // one, otherwise the emoji floating up.
+    // one (and it has loaded), otherwise the emoji floating up.
     const emotes = [];
     const EMOTE_STYLE = new PIXI.TextStyle({ fontSize: 22 });
     function emote(e, text) {
       const name = EMOTE_EFFECT[text];
-      if (name) {
+      if (EFFECTS[name]?.textures) {
         const top = e.y - e.lift - e.tall;
         return effectAt(name, e.x, EFFECTS[name].at === 'head' ? top : top + e.tall / 2);
       }
@@ -1511,13 +1843,15 @@
     const ACCEL = 1400;                                  // how hard cats speed up and brake
     const TURN = 9;                                      // how quickly they swing round to a new heading
     const LEAP = 130;                                    // a chasing cat leaps at the mouse from this close
+    const WALK = 0.45;                                   // walking speed, as a share of running
+    const GAIT = { run: 300, walk: 300 * WALK };         // the speed each one's frames are drawn for
     const relieve = (cat, need, amount) => { cat.needs[need] = Math.max(0, cat.needs[need] - amount); };
 
     // How cats use each kind of object. solo = one cat at a time,
     // chase = it moves so the cat follows it, spot = where to stand.
     const USES = {
-      bowl:    { need: 'hunger', solo: true, ok: b => b.food > 0, use: eat },
-      fish:    { need: 'hunger', solo: true, use: eat },
+      bowl:    { need: 'hunger', solo: true, ok: b => b.food > 0, spot: eatSpot, use: eat },
+      fish:    { need: 'hunger', solo: true, spot: eatSpot, use: eat },
       bed:     { need: 'tired', solo: true, spot: (cat, bed) => ({ x: bed.x, y: bed.y + 1 }),
                  use: (cat, bed) => { cat.lift = bed.def.seat * bed.s; cat.z = 1; nap(cat); } },
       hideout: { need: 'tired', solo: true, spot: (cat, home) => ({ x: home.x, y: home.y + 1 }), use: hide },
@@ -1565,19 +1899,25 @@
     }
 
     // Run to (x, y), or after `follow` if given, then do `next`. `rush`
-    // scales the cat's speed (zoomies, chasing).
+    // scales the cat's speed (zoomies, chasing). A cat that can walk strolls
+    // when it's in no hurry, at WALK of its running speed.
     function goTo(cat, x, y, next = null, follow = null, rush = 1) {
       if (cat.on) return hopDown(cat, () => goTo(cat, x, y, next, follow, rush));   // down off the furniture first
       const to = clearSpot(cat, stand(cat, x, y));
-      Object.assign(cat, { mode: 'move', time: 12, next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y, reroute: 0.5 });
+      const gait = cat.def.anim.walk && rush === 1 && !follow ? 'walk' : 'run';
+      if (gait === 'walk') rush = WALK;
+      Object.assign(cat, { mode: 'move', time: 12 / Math.min(rush, 1), next, tick: null, follow, rush, leaping: false, tx: to.x, ty: to.y, reroute: 0.5 });
       cat.route = route(cat, follow ? follow.x : to.x, follow ? follow.y : to.y);
-      if (cat.anim !== 'run') play(cat, 'run');
+      if (cat.anim !== gait) play(cat, gait);
     }
 
     // Let go of whatever the cat was doing.
     // A cat up on furniture stays there (think() jumps it down).
     function settle(cat) {
-      if (cat.using) cat.using.user = null;
+      if (cat.using) {
+        cat.using.user = null;
+        if (!cat.using.dead) cat.using.sprite.visible = true;    // food it ate from its own dish (see munch)
+      }
       cat.using = cat.follow = cat.next = cat.tick = null;
       land(cat);                                     // a jump cut short ends where it was going
       if (!cat.on) cat.lift = 0;
@@ -1606,13 +1946,14 @@
       [cat => perchesFor(cat).length ? 2 : 0, cat => use(cat, pick(perchesFor(cat)))],
       [cat => 1 + cat.needs.bored * 3, zoomies],
       [cat => entities.some(c => c !== cat && free(c) && c.zone === cat.zone) ? 1.5 : 0, tag],
-      [1, cat => cat.def.anim.happy && Math.random() < 0.5 ? act(cat, 'happy', 1.2) : actOnce(cat, 'jump', 0.9)],
+      // A hop for joy, or a happy loaf (always the loaf for a cat whose jump is borrowed: it would run on the spot).
+      [1, cat => cat.def.anim.happy && (cat.def.as?.jump || Math.random() < 0.5) ? act(cat, 'happy', 1.2) : actOnce(cat, 'jump', 0.9)],
       // A cat with moods also hides in its box, and dances (more so when the music's on).
       [cat => cat.def.anim.box1 ? 1.2 : 0, boxTime],
       [cat => cat.def.anim.dance ? (sound.music ? 2 : 0.4) : 0, dance],
     ];
-    // Standing about: sitting mostly, sometimes looking round.
-    const rest = cat => pick(['idle', 'sit', 'sit', ...(cat.def.anim.idle2 ? ['idle2'] : [])]);
+    // Standing about: sitting mostly, sometimes looking round (or blinking, or lying down).
+    const rest = cat => pick(['idle', 'sit', 'sit', ...['idle2', 'blink', 'loaf'].filter(anim => cat.def.anim[anim])]);
     function pickWeighted(list, cat) {
       const weights = list.map(([w]) => (typeof w === 'function' ? w(cat) : w));
       let r = Math.random() * weights.reduce((a, b) => a + b, 0);
@@ -1624,7 +1965,10 @@
     function sniff(cat) {
       const thing = pick(entities.filter(e => e !== cat && e.zone === cat.zone && !held(e) && e.sprite.visible));
       if (!thing) return act(cat, 'sit', 1.5);
-      goTo(cat, besideX(cat, thing), thing.y + 1, () => { face(cat, thing); act(cat, 'sit', rand(0.8, 1.6)); });
+      goTo(cat, besideX(cat, thing), thing.y + 1, () => {
+        face(cat, thing);
+        cat.def.anim.sniff ? actOnce(cat, 'sniff', 1.5) : act(cat, 'sit', rand(0.8, 1.6));
+      });
     }
 
     // A burst of racing round the room.
@@ -1708,7 +2052,7 @@
     }
     function munch(cat, food) {
       if (food.dead) return;
-      act(cat, 'sit', 3, () => {
+      const done = () => {
         emote(cat, '😋');
         if (food.kind === 'fish') {
           relieve(cat, 'hunger', 0.6);
@@ -1717,7 +2061,30 @@
           relieve(cat, 'hunger', 0.8);
           setFood(food, food.food - 1);
         }
-      });
+      };
+      const at = dishSpot(cat, food);
+      if (!at || Math.hypot(at.x - cat.x, at.y - cat.y) > 16 * unit()) return act(cat, 'sit', 3, done);
+      Object.assign(cat, { x: at.x, y: at.y, dir: Math.sign(at.x - food.x) });
+      food.sprite.visible = false;                         // back when the cat's done (see settle)
+      actOnce(cat, 'eat', 3, done);
+    }
+
+    // Where a cat goes to eat: beside the food. A cat with an eat animation
+    // has a dish in it, though, so it sits where that dish covers the food,
+    // which hides while it eats: on its own side if there's floor there,
+    // else the other. (Food up on furniture, or in a corner, it just eats by.)
+    const DISH = 7;                                        // sheet px from such a cat's feet to its dish
+    function dishSpot(cat, food) {
+      if (!cat.def.anim.eat || food.on) return null;
+      const side = cat.x < food.x ? -1 : 1;
+      for (const s of [side, -side]) {
+        const at = { x: food.x + s * DISH * cat.s, y: food.y + 1 }, kept = stand(cat, at.x, at.y);
+        if (Math.hypot(kept.x - at.x, kept.y - at.y) < 1) return at;
+      }
+      return null;
+    }
+    function eatSpot(cat, food) {
+      return dishSpot(cat, food) ?? { x: besideX(cat, food), y: food.y + 1 };
     }
 
     function setFood(bowl, n) {
@@ -1725,7 +2092,9 @@
       bowl.sprite.tint = n > 0 ? 0xffffff : 0x55556a;     // greyed out = empty
     }
 
-    const nap = cat => act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; });
+    // Curl up for a sleep (a cat that can yawns first).
+    const doze = cat => act(cat, 'sleep', 6 + cat.needs.tired * 12, () => { cat.needs.tired = 0; });
+    const nap = cat => cat.def.anim.yawn ? actOnce(cat, 'yawn', 1.4, () => doze(cat)) : doze(cat);
 
     function hide(cat, home) {
       cat.sprite.visible = false;
@@ -1834,7 +2203,7 @@
         if (scrap) relieve(c, 'bored', 0.3);
         emote(c, scrap ? '💢' : '❤️');
         if (c === cat) say(c, scrap ? 'Hiss!' : 'Mrrp!');
-        act(c, scrap ? 'attack' : 'sit', scrap ? 2 : 4);
+        act(c, scrap ? (c.def.anim.hiss ? 'hiss' : 'attack') : 'sit', scrap ? 2 : 4);
       }
     }
 
@@ -1847,7 +2216,8 @@
         say(cat, 'Hmph!');
         return actOnce(cat, 'jump', 0.8);
       }
-      if (cat.def.anim.tickle && Math.random() < 0.5) return tickle(cat);   // rolls over for a belly rub
+      const fond = ['tickle', 'blush'].filter(anim => cat.def.anim[anim]);    // rolls over for a belly rub, or goes pink
+      if (fond.length && Math.random() < 0.5) return tickle(cat, pick(fond));
       emote(cat, '❤️');
       say(cat, 'Purr~');
       relieve(cat, 'lonely', 0.5);
@@ -1881,12 +2251,21 @@
       say(cat, pick(['Mrow?!', 'Eek!']));
       act(cat, 'surprised', 1.4);
     }
-    function tickle(cat) {
+    function tickle(cat, anim = 'tickle') {
       emote(cat, '❤️');
       say(cat, 'Purr~');
       relieve(cat, 'lonely', 0.5);
       relieve(cat, 'bored', 0.2);
-      act(cat, 'tickle', 2.6);
+      act(cat, anim, 2.6);
+    }
+    function hiss(cat) {
+      emote(cat, '💢');
+      say(cat, 'Hiss!');
+      actOnce(cat, 'hiss', 1.5);
+    }
+    function shy(cat) {
+      say(cat, pick(['Mew…', '…']));
+      act(cat, 'shy', 2.4);
     }
     function cry(cat) {
       say(cat, pick(['Mew…', 'Sniff…']));
@@ -1911,6 +2290,9 @@
       { label: 'Loaf', anim: 'happy', frame: 0, run: cat => act(cat, 'happy', rand(3, 5)) },
       { label: 'Cry', anim: 'crying', frame: 0, run: cry },
       { label: 'Flop', anim: 'dead2', frame: 4, run: flop },
+      { label: 'Hiss', anim: 'hiss', frame: 5, run: hiss },
+      { label: 'Shy', anim: 'shy', frame: 3, run: shy },
+      { label: 'Blush', anim: 'blush', frame: 7, run: cat => tickle(cat, 'blush') },
     ];
 
     function updateCat(cat, dt) {
@@ -1978,9 +2360,8 @@
       cat.x += cat.vx * dt;
       cat.y += cat.vy * dt;
       if (Math.abs(cat.vx) > 8 * u) cat.dir = Math.sign(cat.vx);
-      if (cat.anim === 'run') {                                               // legs keep pace with the floor
-        cat.sprite.animationSpeed = ANIM_SPEED.run * clampTo(Math.hypot(cat.vx, cat.vy) / (300 * u), 0.5, 1.8);
-      }
+      const pace = GAIT[cat.anim];                                            // legs keep pace with the floor
+      if (pace) cat.sprite.animationSpeed = ANIM_SPEED[cat.anim] * clampTo(Math.hypot(cat.vx, cat.vy) / (pace * u), 0.5, 1.8);
       return true;
     }
 
@@ -2238,7 +2619,7 @@
     const edgeLengths = S => [Math.hypot(S.left[0] - S.front[0], S.left[1] - S.front[1]), Math.hypot(S.right[0] - S.front[0], S.right[1] - S.front[1])];
     // How much room e takes up on furn, in furn's picture pixels (a cat
     // sitting, not stretched out running).
-    const roomFor = (e, furn) => (e.kind === 'cat' ? (e.def.anim.sit.crop[2] * e.s) / 2 * 0.4 : e.half * 0.7) / furn.s;
+    const roomFor = (e, furn) => (e.kind === 'cat' ? ((e.def.anim.sit ?? e.def.look).crop[2] * e.s) / 2 * 0.4 : e.half * 0.7) / furn.s;
     const onLevel = (furn, levelNo, skip) => entities.filter(o => o.on === furn && o.spot.level === levelNo && o !== skip);
 
     // Is (u, v) free for something r wide? Lower shelves only use their
@@ -2557,9 +2938,11 @@
         Object.assign(drag, { ox: w.x - p.x, oy: w.y - p.y, homeX: w.x, homeY: w.y });
         selectWall(w);
         wallLayer.addChild(w.sprite);                       // in front of the other wall objects
+        document.body.classList.add('holding');             // (on a phone, out comes the trash)
         return;
       }
       if (e.fixed) return;                                  // scenery stays put
+      document.body.classList.add('holding');
       Object.assign(drag, { homeX: e.x, homeY: e.y, homeZone: e.zone, homeOn: e.on, homeSpot: e.spot });
       if (e.on) {                                           // lifted off a table or shelf
         land(e);
@@ -2573,8 +2956,9 @@
         if (e === menuCat) catMenu.hidePopover();
         settle(e);
         e.mode = null;
-        play(e, 'jump');
-        e.sprite.gotoAndStop(3);                            // mid-leap: legs dangling
+        const [anim, frame] = e.def.hold ?? ['jump', 3];    // legs dangling (mid-leap, for most cats)
+        play(e, anim);
+        e.sprite.gotoAndStop(frame);
       } else {
         if (e.user) think(e.user);
         for (const c of entities) if (c.kind === 'cat' && c.on === e) think(c);   // cats on it jump off
@@ -2633,7 +3017,7 @@
       removeEventListener('pointermove', onDragMove);
       removeEventListener('pointerup', endDrag);
       removeEventListener('pointercancel', endDrag);
-      document.body.classList.remove('dragging');
+      document.body.classList.remove('dragging', 'holding');
       trashEl.classList.remove('armed');
       hideDrop();
       const { e, w, def, moved, ghost, homeX, homeY, homeZone, homeOn, homeSpot, x: dropX, y: dropY } = drag;
@@ -2734,6 +3118,7 @@
       sprite.cursor = 'grab';
       const w = { def, x, y, sprite };
       sprite.on('pointerdown', ev => startDrag({ w }, ev));
+      sprite.on('rightclick', ev => openThingMenu({ w }, ev));
       wallLayer.addChild(sprite);
       walls.push(w);
       fitOnWall(w);
@@ -2745,6 +3130,7 @@
       const i = walls.indexOf(w);
       if (i < 0) return;
       if (w === selectedWall) selectWall(null);
+      if (w === menuThing?.w) thingMenu.hidePopover();
       walls.splice(i, 1);
       const [, , width, height] = w.def.frame;
       effectAt('smoke', view.x + (w.x + width / 2) * view.k, view.y + (w.y + height / 2) * view.k);
@@ -2925,6 +3311,46 @@
     }
 
     // ------------------------------------------------------------------
+    // Right-click menu – right-click a cat, a thing or something on the
+    // walls to delete it. (With a finger, drag it to the trash instead.)
+    // ------------------------------------------------------------------
+    const thingMenu = document.getElementById('thing-menu');
+    const thingDelete = document.getElementById('thing-delete');
+    let menuThing = null;                                 // what it's open for: { e } or { w }
+
+    function openThingMenu(target, ev) {
+      const { e, w } = target;
+      if (drag || e?.fixed || e?.dying || e?.dead) return;
+      const def = (e ?? w).def;
+      menuThing = target;
+      document.getElementById('thing-pic').replaceChildren(thumb(def, fitScale(def, 32)));
+      document.getElementById('thing-name').textContent = e?.kind === 'cat' ? e.name : def.name;
+      if (!thingMenu.matches(':popover-open')) thingMenu.showPopover();
+      // At the pointer, or the other side of it where it would run off the screen.
+      const width = thingMenu.offsetWidth, height = thingMenu.offsetHeight;
+      thingMenu.style.left = `${Math.max(8, ev.clientX + width > innerWidth - 8 ? ev.clientX - width : ev.clientX)}px`;
+      thingMenu.style.top = `${Math.max(8, ev.clientY + height > innerHeight - 8 ? ev.clientY - height : ev.clientY)}px`;
+      thingDelete.focus({ preventScroll: true });
+    }
+
+    function setupThingMenu() {
+      app.canvas.addEventListener('contextmenu', ev => ev.preventDefault());   // the room's own menu instead
+      thingDelete.addEventListener('click', () => {
+        const { e, w } = menuThing ?? {};
+        thingMenu.hidePopover();
+        if (w) { removeWall(w); touched(); }
+        else if (e) { remove(e); if (e.kind !== 'cat') touched(); }
+      });
+      thingMenu.addEventListener('keydown', ev => {
+        if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+        ev.preventDefault();
+        thingDelete.click();
+      });
+      // (beforetoggle, not toggle: it comes straight away, so menuThing is only ever set while it's open)
+      thingMenu.addEventListener('beforetoggle', ev => { if (ev.newState === 'closed') menuThing = null; });
+    }
+
+    // ------------------------------------------------------------------
     // Dialogs
     // ------------------------------------------------------------------
     // Open a modal <dialog>; resolves with the value of the button that
@@ -2993,8 +3419,16 @@
     }
 
     async function pickRoom() {
-      const choice = await choose(roomsDialog, roomGrid, () => ROOM_TYPES.map(({ name }, i) =>
-        ({ value: i, label: `${name} room`, pic: roomThumb(buildRoom(i), 64) })), roomType);
+      if (ROOM_TYPES.some(r => !art[r.src])) {              // the other rooms are still on their way
+        const button = document.getElementById('room-button');
+        if (button.hasAttribute('aria-busy')) return;     // (already waiting for them)
+        button.setAttribute('aria-busy', 'true');
+        await loadMore();
+        button.removeAttribute('aria-busy');
+        roomGrid.replaceChildren();                         // (re)built with them below
+      }
+      const choice = await choose(roomsDialog, roomGrid, () => ROOM_TYPES.flatMap(({ name, src }, i) => art[src]
+        ? [{ value: i, label: `${name} room`, pic: roomThumb(buildRoom(i), 64) }] : []), roomType);
       if (choice === null || Number(choice) === roomType) return;
       const i = Number(choice), name = Object.assign(document.createElement('strong'), { textContent: `${ROOM_TYPES[i].name} room` });
       // Your own arrangement isn't thrown away without asking.
@@ -3213,7 +3647,7 @@
     function populate() {
       catsArrived = 0;
       const plan = furnish(roomType);
-      spawn(byName('Cream cat'), ...atFloor(...plan.cat));
+      spawn(COCO, ...atFloor(...plan.cat));
       for (const def of SCENERY) spawn(def, yard.x0, yard.y1, { zone: 'yard', fixed: true });
       placeScenery();
       const tree = entities.find(e => e.def === PLAY_TREE), from = tree.x + tree.half;
@@ -3278,7 +3712,8 @@
         allButton.setAttribute('aria-expanded', String(open));
         allButton.querySelector('.sign').src = open ? SIGN.open : SIGN.closed;
       };
-      paletteEl.appendChild(allButton);
+      const line = paletteEl.appendChild(document.createElement('div'));   // the row they all sit in
+      line.appendChild(allButton);
 
       for (const [group, defs] of Map.groupBy(CATALOG, d => d.group)) {
         const section = document.createElement('section');
@@ -3319,7 +3754,7 @@
           });
           row.appendChild(button);
         }
-        paletteEl.appendChild(section);
+        line.appendChild(section);
       }
 
       allButton.setAttribute('aria-controls', groups.map(g => g.row.id).join(' '));
@@ -3484,13 +3919,16 @@
       on ? playMusic() : pauseMusic();
     }
 
-    // Open a tool's menu just under its button, kept on the screen.
-    function placeUnder(menu, button) {
-      const r = button.getBoundingClientRect(), w = menu.offsetWidth;
-      menu.style.left = `${clampTo(r.right - w, 8, innerWidth - w - 8)}px`;
-      menu.style.top = `${r.bottom + 8}px`;
+    // Open a tool's menu beside its button (left of the dock), kept on the
+    // screen. In the compact layout the CSS puts it in the middle instead.
+    function placeBeside(menu, button) {
+      menu.style.left = menu.style.top = '';
+      if (compact.matches) return;
+      const r = button.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+      menu.style.left = `${Math.max(8, r.left - w - 12)}px`;
+      menu.style.top = `${clampTo(r.top + r.height / 2 - h / 2, 8, Math.max(8, innerHeight - h - 8))}px`;
     }
-    const placeSoundMenu = () => placeUnder(soundMenu, soundButton);
+    const placeSoundMenu = () => placeBeside(soundMenu, soundButton);
 
     function setupSound() {
       loadSoundSettings();
@@ -3611,8 +4049,8 @@
       return out;
     }
 
-    // The whole page: the bar and the signature as pictures, the scene
-    // between them. Without SnapDOM (offline, say) it's just the scene.
+    // The whole page: the bar, the settings and the signature as pictures,
+    // over the scene. Without SnapDOM (offline, say) it's just the scene.
     async function screenShot() {
       const res = app.renderer.resolution;
       const out = Object.assign(document.createElement('canvas'), { width: Math.round(innerWidth * res), height: Math.round(innerHeight * res) });
@@ -3625,8 +4063,12 @@
       put(await sceneShot(), at(sceneEl));
       try {
         const { snapdom } = await import('./assets/vendor/snapdom.mjs');
-        for (const el of [document.querySelector('.bar'), document.querySelector('.signature')]) {
-          put(await snapdom.toCanvas(el, { dpr: res, scale: 1 }), at(el));
+        // Each is drawn where it is on the page, so its copy shouldn't be
+        // positioned too (the dock's is worked out from the whole scene).
+        const unpin = { name: 'unpin', afterClone: ({ clone }) => Object.assign(clone.style, { position: 'static', margin: '0', maxHeight: 'none' }) };
+        for (const el of document.querySelectorAll('.bar, .dock, .fab, .signature')) {
+          const r = at(el);
+          if (r.width && r.height) put(await snapdom.toCanvas(el, { dpr: res, scale: 1, plugins: [unpin] }), r);   // (whichever is showing)
         }
       } catch (err) {
         console.warn('Photo without the bar:', err);
@@ -3678,8 +4120,8 @@
     }
 
     function setupPhotos() {
-      photoMenu.addEventListener('toggle', ev => { if (ev.newState === 'open') placeUnder(photoMenu, photoButton); });
-      addEventListener('resize', () => { if (photoMenu.matches(':popover-open')) placeUnder(photoMenu, photoButton); });
+      photoMenu.addEventListener('toggle', ev => { if (ev.newState === 'open') placeBeside(photoMenu, photoButton); });
+      addEventListener('resize', () => { if (photoMenu.matches(':popover-open')) placeBeside(photoMenu, photoButton); });
       document.getElementById('pause-toggle').addEventListener('click', () => setPaused(!paused));
       pausedBadge.addEventListener('click', () => setPaused(false));
       for (const b of photoMenu.querySelectorAll('[data-shot]')) b.addEventListener('click', () => takePhoto(b.dataset.shot));
@@ -3691,14 +4133,43 @@
     }
 
     // ------------------------------------------------------------------
+    // Settings dock – beside the room. In the compact layout (`compact`,
+    // the same query as in the CSS) the tools are a popover that the round
+    // button opens, and picking one closes it so what that opens has the
+    // screen. (A tool that's still busy fetching keeps it open meanwhile;
+    // its dialog closes it when it opens.)
+    // ------------------------------------------------------------------
+    const toolsEl = document.getElementById('tools');
+    const dockEl = document.querySelector('.dock');
+    const compact = matchMedia('(max-width: 600px), (max-height: 560px)');
+
+    function setupDock() {
+      const fold = () => toolsEl.toggleAttribute('popover', compact.matches);
+      compact.addEventListener('change', fold);
+      fold();
+      toolsEl.addEventListener('click', ev => {
+        if (ev.target.closest('button:not([aria-busy])') && toolsEl.matches(':popover-open')) toolsEl.hidePopover();
+      });
+    }
+
+    // How much of the scene's width (from the left) the room may use:
+    // all of it, less the dock where there is one.
+    function roomSpace(width) {
+      const dock = dockEl.getBoundingClientRect();
+      return compact.matches || !dock.width ? width : dock.left - sceneEl.getBoundingClientRect().left - 8;
+    }
+
+    // ------------------------------------------------------------------
     // Main
     // ------------------------------------------------------------------
     function start() {
       buildPalette();
       setupMenu();
+      setupThingMenu();
       setupWalls();
       setupSound();
       setupPhotos();
+      setupDock();
       updateSky();
       setInterval(updateSky, 60_000);
       setRoom(DEFAULT_ROOM);
@@ -3730,9 +4201,12 @@
         updateStars(dt);
         updateMenu(dt);
       });
+
+      document.getElementById('loading').classList.add('done');
+      loadMore();                                         // the rest of the pictures
     }
 
-    loadArt().then(start, showError);
+    loadArt(showProgress).then(start).catch(showError);
   </script>
 </body>
 </html>
