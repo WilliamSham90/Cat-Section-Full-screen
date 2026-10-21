@@ -3334,7 +3334,9 @@
     }
 
     function setupThingMenu() {
-      app.canvas.addEventListener('contextmenu', ev => ev.preventDefault());   // the room's own menu instead
+      // The room's own menu instead. On Windows contextmenu comes after the button
+      // is let go, by when this menu has opened under the pointer, so it needs it too.
+      for (const el of [app.canvas, thingMenu]) el.addEventListener('contextmenu', ev => ev.preventDefault());
       thingDelete.addEventListener('click', () => {
         const { e, w } = menuThing ?? {};
         thingMenu.hidePopover();

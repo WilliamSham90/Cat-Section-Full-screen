@@ -27,9 +27,21 @@ python3 -m http.server 8000
 then open <http://localhost:8000>. Any static server works (VS Code Live
 Server, `npx serve`, …).
 
-Pushing to `main` publishes the site to GitHub Pages
-(`.github/workflows/static.yml`). Only `index.html`, `site.webmanifest` and
-`assets/` are published.
+## Putting it on cPanel
+
+Only `index.html`, `site.webmanifest`, `.htaccess` and `assets/` go on the
+server. Zip them from the repository root:
+
+```sh
+python3 -m zipfile -c cat-playground.zip index.html site.webmanifest .htaccess assets
+```
+
+(Don't use Windows' "Compressed folder": it can write `\` into the paths and
+cPanel unpacks them as flat files.) In cPanel's File Manager, open
+`public_html` (or a folder inside it), upload the zip, right-click it →
+Extract, then delete the zip. `.htaccess` is hidden unless Settings → "Show
+Hidden Files" is ticked; it makes Apache send `.mjs` as JavaScript, which
+the Photo button needs.
 
 ## Layout
 
